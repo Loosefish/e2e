@@ -1,0 +1,59 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[ngerman]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{bbm}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{verbatimbox}
+\usepackage[left=2.5cm,top=3cm,right=2.5cm,bottom=3cm,bindingoffset=0.5cm]{geometry}
+\usepackage{paralist}
+\usepackage{listings}
+\usepackage{booktabs}
+
+%\setlength\parindent{0pt}
+
+%% TikZ %%
+
+\usepackage{tikz}
+\usetikzlibrary{positioning,fit}
+
+%% Metadaten %%
+
+\usepackage[pdfusetitle,pdfstartview=FitH]{hyperref}
+%\usepackage[pdfusetitle,hidelinks]{hyperref}
+%\title{...}
+%\author{...}
+%\date{...}
+
+%% Header & Footer %%
+
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\lhead{Henry Dettmer\\ Christoph Döpmann}
+\chead{Projektskizze (Abgabe bis: 30.11.2015)\\}
+\rhead{Peer-To-Peer-Systeme \\ Prof. Scheuermmann}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+%% Das Dokument... %%
+
+\begin{document}
+%\maketitle
+%\thispagestyle{fancy}
+
+\section*{Projektskizze: "`Verteiltes Musikhören"'}
+\subsection*{Zweck der Anwendung}
+Das zu entwickelnde System soll es seinen Benutzern ermöglichen, mittels eines Peer-to-Peer-Systems andere Benutzer zu finden, die auf ihren Rechnern die gleichen Musikdateien haben. Die Benutzer können sich dann in Gruppen zusammenschließen, um gleichzeitig die gemeinsam vorhandenen Musiktitel abzuspielen.
+
+\subsection*{Ziele}
+Ziel des Projekts ist es, ein Peer-to-Peer-System zu entwickeln, in dem Benutzer nach anderen Benutzern mit gleicher Musik suchen können, sich mit diesen zu Gruppen zusammenschließen können und synchronisiert eine gemeinsame Playlist abspielen können. Dabei setzen wir uns nicht zum Ziel, eine (ohnehin unmögliche) perfekte, zeitliche Synchronisation zu erreichen, sondern setzen eine hinreichend gute globale Uhr voraus, die die Genauigkeit des synchronen Abspielens definiert. Der Fokus liegt in jedem Fall auf der Suche nach anderen Benutzern sowie der Gruppenverwaltung und weniger auf dem Wiedergabeprozess.
+
+Wir wollen eine für diese Anwendung vertretbare Skalierbarkeit und Robustheit erreichen. Insbesondere tolerieren wir Funktionsstörungen durch Ausfälle oder Netzwerkprobleme, solange sie nur lokaler Natur sind und nicht die Funktionsfähigkeit des Gesamtnetzes beeinträchtigen.
+
+\subsection*{Technische Umsetzung}
+Grundlage des Gesamtnetzes wird ein unstrukturiertes Overlay sein, sehr an Gnutella orientiert. Damit werden der Beitritt zum Gesamtnetz und die Suche nach passenden Benutzern realisiert. Finden sich mehrere Benutzer zu einer Gruppe zusammen, so übernimmt einer der Teilnehmer für die Zeit der Kooperation die Rolle eines "`Masters"' und der Prozess des synchronen Musikhörens wird auf sehr zentralisierte Art und Weise organisiert. Während dieser Zeit wird eventuell nur der Master im Gesamtnetz aktiv sein und eine Rolle ähnlich der eines Superpeers aus Gnutella 0.6 übernehmen.
+
+Die Implementierung wird in Python erfolgen.
+
+\end{document}
