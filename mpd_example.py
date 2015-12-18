@@ -29,13 +29,20 @@ def run(music_dir):
         # run mpd
         mpd_proc = Popen(['mpd', '--no-daemon', mpd_conf])
         daemon.set_socket(mpd_socket)
-        sleep(2)
 
-        # get all song titles
-        for s in music.get_songs():
-            print(s.__dict__)
+        # wait for mpd to start
+        while True:
+            try:
+                playback.get_status()
+                break
+            except (ConnectionRefusedError, FileNotFoundError):
+                pass
+        # wait for music database
+        daemon.get_query("idle database")
 
         print(playback.get_status().__dict__)
+        print(daemon.get_dicts('stats'))
+        assert(int(daemon.get_dicts('stats')[0]['songs']) == len(music.get_songs()))
 
         mpd_proc.kill()
         mpd_proc.wait()

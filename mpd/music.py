@@ -8,13 +8,14 @@ from mpd.daemon import get_dicts
 
 def get_songs():
     try:
-        return [Song(mpd_dict=s) for s in get_dicts('listallinfo')]
+        files = (f['file'] for f in get_dicts('list file'))
+        return [Song(get_dicts('lsinfo "{}"'.format(f))[0]) for f in files]
     except IndexError:
         return []
 
 
 def search_songs(title):
-    return [Song(mpd_dict=s) for s in get_dicts('search Title "{}"'.format(title))]
+    return [Song(s) for s in get_dicts('search Title "{}"'.format(title))]
 
 
 def get_image(song):
