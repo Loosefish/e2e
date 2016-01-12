@@ -52,14 +52,16 @@ class QueueSet:
         multiple queues, so e.g. starvation may occur.'''
             
         while True:
+            # first check if there is data ready
+            for q in self.queues:
+                try:
+                    data = q.get_nowait()
+                    return (q, data)
+                except queue.Empty:
+                    pass
+
             if self.event.wait(timeout):
                 self.event.clear()
-                for q in self.queues:
-                    try:
-                        data = q.get_nowait()
-                        return (q, data)
-                    except queue.Empty:
-                        pass
             else:
                 raise queue.Empty()
 
