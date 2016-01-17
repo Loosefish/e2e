@@ -8,6 +8,7 @@ import socket
 import logging
 import queue
 import uuid
+import random
 
 from signalqueue import QueueSet
 import proto
@@ -15,23 +16,26 @@ import proto
 N_NEIGHBOURS = 2    # number of neighbours every node tries to have
 
 class Overlay(threading.Thread):
+    my_address = None # TODO find cleaner way to make this info available to
+                      # the Peer class
 
     def __init__(self, listenaddress, entrypeers):
         self.logger = logging.getLogger("overlay")
 
         self.listenaddress = listenaddress
+        Overlay.my_address = listenaddress # TODO validate, prevent injections
         self.entrypeers = entrypeers
 
         self.state = {
             'neighbours': [ ],
             'joining': None,   # has data when we are currently trying to join
+            'pings': dict( ),
         }
 
         self.queues = QueueSet()
         self.cmdqueue = self.queues.New() # commands by the user
 
-        self.peer_to_queue = dict() # remember which queue was used for
-        self.queue_to_peer = dict() #   which peer
+        self.queue_to_peer = dict() # remember which queue was used for which peer  
 
         # first connect to the overlay
         if entrypeers is not None:
@@ -52,7 +56,8 @@ class Overlay(threading.Thread):
         self.logger.debug('setting up socket...')
         self.listen = socket.socket()
         self.logger.debug('trying to listen on {}...'.format(self.listenaddress))
-        self.listen.bind(self.listenaddress)
+
+        self.listen.bind(Peer.parse_address(self.listenaddress))
         self.listen.listen(10)
         self.logger.info('server socket established.')
 
@@ -79,7 +84,6 @@ class Overlay(threading.Thread):
                 new_peer = Peer.from_connection(data, new_queue)
 
                 # remember the Peer and the queue
-                self.peer_to_queue[new_peer] = new_queue
                 self.queue_to_peer[new_queue] = new_peer
 
                 # start the peer thread
@@ -127,7 +131,6 @@ class Overlay(threading.Thread):
                         self.queues.remove(new_queue)
                         continue
 
-                    self.peer_to_queue[good_peer] = new_queue
                     self.queue_to_peer[new_queue] = good_peer
                     good_peer.start()
                     
@@ -147,7 +150,7 @@ class Overlay(threading.Thread):
                 self.logger.info('got a message from peer {}: {}'.format(peer, data))
 
                 if data is None:
-                    self.logger.info('connection closed by peer')
+                    self.logger.info('connection closed')
 
                     if self.state['joining'] is not None and peer == self.state['joining']['current_entry']:
                         self.logger.error('error joining, entry died')
@@ -159,12 +162,132 @@ class Overlay(threading.Thread):
                         else:
                             self.logger.error('joining finally failed.')
 
-                    del self.peer_to_queue[peer]
+                    # TODO remove from pongs pending list and trigger
+                    # processing
+
+                    # TODO if neighbour, try to reconnect (peer may have closed
+                    # it, unaware of the fact that it's a neighbour of ours)
+                    # TODO update neighbour list
+
                     del self.queue_to_peer[inqueue]
 
                 elif isinstance(data, proto.Ping):
                     self.logger.debug('got a PING message!')
-                    # TODO dict etc.
+                    p_id = data.get_id()
+                    ttl = data.get_ttl()
+
+                    # is this my ping?
+                    # TODO
+                    
+                    # neighbours we'd have to wait for
+                    dependencies = [x for x in self.state['neighbours'] if x != peer ]
+
+                    if ttl == 0 or len(dependencies) == 0:
+                        # do not recurse
+                        self.logger.debug('answering with PONG directly')
+                        peer.send(proto.Pong(p_id, []))
+                        if peer not in self.state['neighbours']:
+                            # keep connection to neighbours alive
+                            peer.disconnect()
+                        continue
+
+                    # is it a new ping?
+                    if p_id in self.state['pings']:
+                        self.logger.debug('already know ping {}, send empty Pong'
+                                          .format(p_id))
+                        peer.send(proto.Pong(p_id, []))
+                        continue
+
+                    self.state['pings'][p_id] = {
+                        'from': peer,
+                        'pending': dependencies,  # pongs we're waiting for
+                        'collected': set(), #  peers collected by pongs
+                    }
+
+                    for n in self.state['pings'][p_id]['pending']:
+                        self.logger.debug('forwarding ping to {}'.format(n))
+                        n.send(proto.Ping(p_id, ttl-1))
+
+                elif isinstance(data, proto.Pong):
+                    self.logger.debug('got a PONG message!')
+                    p_id = data.get_id()
+                    addrs = data.get_peers()
+
+                    if self.state['joining'] is not None and peer == self.state['joining']['current_entry']:
+                        neighbourset = {peer.get_address_str()} | addrs
+                        self.logger.debug('got possible neighbours: {}'.
+                                          format(neighbourset))
+
+                        # choose random neighbours
+                        neighbourlist = list(neighbourset)
+                        random.shuffle(neighbourlist)
+
+                        for n in neighbourlist:
+                            if len(self.state['neighbours']) >= N_NEIGHBOURS:
+                                break
+                            self.logger.debug('trying peer {} as a neighbour'.format(n))
+
+                            new_queue = self.queues.New()
+                            try:
+                                new_peer = Peer(n, new_queue)
+                                new_peer.connect()
+                                # TODO only successful if remote peer also
+                                # wants to be our neighbour
+                            except OSError as e:
+                                self.logger.warning('neighbour {} does not work ({})'
+                                                    .format(n, e))
+                                continue
+                            self.logger.debug('peer {} added as a neighbour'.format(n))
+                            self.state['neighbours'].append(new_peer)
+                            new_peer.start()
+                            new_peer.send(proto.Neighbour())
+                            self.queue_to_peer[new_queue] = new_peer
+
+                        # don't need to close connection, since the peer
+                        # triggered closing it
+
+                        self.state['joining'] = None
+                        continue
+
+                    if p_id not in self.state['pings']:
+                        self.logger.warning('unexpected PONG from {}'.format(peer))
+                        continue
+
+                    if peer not in self.state['pings'][p_id]['pending']:
+                        self.logger.warning('unexpected PONG from {} (not pending)'.format(peer))
+
+                    self.state['pings'][p_id]['pending'].remove(peer)
+                    self.state['pings'][p_id]['collected'].add(peer.get_address_str())
+                    self.state['pings'][p_id]['collected'] |= (addrs)
+
+                    if len(self.state['pings'][p_id]['pending']) == 0:
+                        self.logger.debug('got all pending PONGs')
+
+                        self.state['pings'][p_id]['from'].send(proto.Pong(
+                            p_id, self.state['pings'][p_id]['collected']
+                        ))
+
+                        if self.state['pings'][p_id]['from'] not in self.state['neighbours']:
+                            # keep connection to neighbours alive
+                            self.state['pings'][p_id]['from'].disconnect()
+
+                        # TODO already delete pings entry ??
+                        del self.state['pings'][p_id]
+
+                elif isinstance(data, proto.Neighbour):
+                    self.logger.debug('peer {} uses us as a neighbour'.format(peer))
+
+                    if peer in self.state['neighbours']:
+                        self.logger.debug('already have it as a neighbour')
+                        continue
+
+                    if len(self.state['neighbours']) >= N_NEIGHBOURS:
+                        self.logger.debug('we have enough neighbours')
+                        continue
+
+                    self.logger.debug('peer {} added as a neighbour'.format(peer))
+                    self.state['neighbours'].append(peer)
+                    new_peer.send(proto.Neighbour())
 
             else:
                 self.logger.error('unknown input: {}'.format(data))
@@ -194,8 +317,8 @@ class ConnectionWaiter(threading.Thread):
 
 class Peer(threading.Thread): # TODO differentiate sending/receiving socket ???
     def __init__(self, address, inbox, reuse_socket=None):
-        self.address = address
-        self.logger = logging.getLogger('peer.{}'.format(self.address))
+        self.address = Peer.parse_address(address)
+        self.logger = logging.getLogger('peer')
 
         self.socket_lock = threading.Lock()
 
@@ -211,12 +334,35 @@ class Peer(threading.Thread): # TODO differentiate sending/receiving socket ???
         threading.Thread.__init__(self)
 
 
+    def parse_address(s):
+        '''Parse an <ip>:<port> string into a proper tuple.'''
+        try:
+            # do not convert if already an (ip,port)-tuple
+            (a,b) = s
+            return s
+        except (TypeError,ValueError):
+            pass
+
+        try:
+            return ('127.0.0.1', int(s))
+        except ValueError:
+            pass
+
+        try:
+            host,port = s.split(':')
+            return (host.strip(), int(port))
+        except ValueError:
+            raise ValueError('invalid host/port: {}'.format(s))
+
+
     @staticmethod
     def from_connection(conn, inbox):
         '''Construct a Peer object from an already-established connection, e.g.
         after accepting it from a listening socket.'''
 
-        return Peer(conn.getpeername(), inbox, reuse_socket=conn)
+        new_peer = Peer(conn.getpeername(), inbox, reuse_socket=conn)
+        new_peer.send(proto.Hello(Overlay.my_address))
+        return new_peer
 
 
     def connect(self):
@@ -231,6 +377,7 @@ class Peer(threading.Thread): # TODO differentiate sending/receiving socket ???
             try:
                 self.sock = socket.socket() # defaults to IPv4 TCP
                 self.sock.connect(self.address)
+                self.send(proto.Hello(Overlay.my_address))
             except OSError:
                 self.sock = None
                 self.state = "disconnected"
@@ -242,6 +389,17 @@ class Peer(threading.Thread): # TODO differentiate sending/receiving socket ???
     def get_state(self):
         return state
 
+    def get_address(self):
+        return self.address
+
+    def get_address_str(self):
+        ip,port = self.get_address()
+        return '{}:{}'.format(ip, port)
+
+    def disconnect(self):
+        self.logger.debug('closing connection to peer {}'.format(self))
+        self.sock.shutdown(socket.SHUT_WR)
+        self.state = "disconnected"
 
     def send(self, message):
         '''Send a protocol message to the remote peer'''
@@ -256,6 +414,10 @@ class Peer(threading.Thread): # TODO differentiate sending/receiving socket ???
             # connctions as we don't "use" them)
             self.logger.exception(e)
 
+
+    def __str__(self):
+        return '{}'.format(self.get_address())
+
     
     def run(self):
         '''Run to infinity, reading lines from the socket and putting them as
@@ -267,19 +429,41 @@ class Peer(threading.Thread): # TODO differentiate sending/receiving socket ???
 
         msg = bytes()
         while True:
-            data = self.sock.recv(1) # TODO more efficient, buffering
-            
+            try:
+                data = self.sock.recv(1) # TODO more efficient, buffering
+            except OSError as e:
+                data = None
+                self.logger.warning('error reading from socket: {}'.format(e.strerror))
+
             if data is None or len(data) == 0:
                 self.logger.info('TCP connection was closed')
-                self.inbox.put(None)
-                self.sock.shutdown(socket.SHUT_RDWR)
+
+                try:
+                    # in case our side was not yet shut down
+                    self.sock.shutdown(socket.SHUT_WR)
+                except OSError as e:
+                    if e.errno != 107:
+                        raise
+
                 self.sock.close()
+                self.inbox.put(None)
                 return
 
             if data == b'\n':
                 parsed = proto.parse(msg)
-                self.inbox.put(parsed)
                 msg = bytes()
+
+                if isinstance(parsed, proto.Hello):
+                    # update the remote port
+
+                    ip,port = self.address
+                    new_port = parsed.get_port()
+                    self.logger.debug('remote server port is now known as {} (was: {})'
+                                      .format(new_port, port))
+                    self.address = (ip,new_port)
+                    continue
+
+                self.inbox.put(parsed)
 
                 if parsed is None:
                     self.sock.shutdown(socket.SHUT_RDWR)
