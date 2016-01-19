@@ -5,6 +5,7 @@ import argparse
 import sys
 
 import overlay
+import mpd
 
 
 if __name__ == '__main__':
@@ -12,14 +13,18 @@ if __name__ == '__main__':
     logger = logging.getLogger('main')
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('music')
     parser.add_argument('address')
     parser.add_argument('-c', '--connect', action='store', nargs='+',
                         dest='remotes')
-    
+
     args = parser.parse_args()
 
+    logger.debug('music: {}'.format(args.music))
     logger.debug('address: {}'.format(args.address))
     logger.debug('connect to: {}'.format(args.remotes))
+
+    mpd.run(args.music)
 
     local_address = args.address
     if args.remotes is None:
@@ -32,7 +37,5 @@ if __name__ == '__main__':
     the_overlay.start()
 
     while True:
-        line = sys.stdin.readline()
-
-        overlay_cmd.put(('keyboard_entered', line.strip())) # TODO
-
+        line = sys.stdin.readline().strip()
+        overlay_cmd.put(('keyboard_entered', line))  # TODO
