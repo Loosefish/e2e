@@ -3,6 +3,7 @@
 
 import os
 from random import sample
+from hashlib import md5
 
 from mpd.daemon import get_dicts
 
@@ -30,12 +31,12 @@ def get_image(song):
 
 
 def get_sample(size=100):
-    return [hash(s) for s in sample(get_songs(), size)]
+    return [md5(bytes(s)).hexdigest() for s in sample(get_songs(), size)]
 
 
-def check_sample(sample):
-    hashes = set(hash(s) for s in get_songs())
-    return int(len(set(sample) & hashes) / len(sample) * 100)
+def check_sample(to_check):
+    hashes = set(md5(bytes(s)).hexdigest() for s in get_songs())
+    return int(len(set(to_check) & hashes) / len(to_check) * 100)
 
 
 class Song(object):
@@ -57,8 +58,13 @@ class Song(object):
                 self.__setattr__(Song.mpd_keys[k], v)
         self.time = int(self.time)
 
-    def __hash__(self):
-        return hash((self.artist.lower().strip(), self.title.lower().strip(), self.time // 10))
+    def __bytes__(self):
+        components = (
+            self.artist.lower().strip(),
+            self.title.lower().strip(),
+            str(self.time // 10)
+        )
+        return b'_'.join(c.encode() for c in components)
 
     def __repr__(self):
         return 'Song' + repr(self.__dict__)

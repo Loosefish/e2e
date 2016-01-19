@@ -23,6 +23,7 @@ class Ping:
         self.ping_id = ping_id
         self.ttl = ttl
 
+    @staticmethod
     def from_raw(raw):
         match = re.match(r'\s*id=(\S+)\s+ttl=(\d+)\s*$', raw.strip())
         if match is None:
@@ -47,13 +48,14 @@ class Pong:
         self.ping_id = ping_id
         self.addrs = addrs
 
+    @staticmethod
     def from_raw(raw):
         match = re.match(r'\s*id=(\S+)\s+peers=(\S*)\s*$', raw.strip())
         if match is None:
             logging.getLogger('proto.PONG').error('invalid PONG msg: {}'
                                                   .format(raw))
             return None
-        
+
         ping_id = match.group(1)
         peers = {p for p in match.group(2).split(',') if len(p) > 0}
 
@@ -68,17 +70,19 @@ class Pong:
     def __bytes__(self):
         return 'PONG id={} peers={}'.format(self.ping_id, ','.join(self.addrs)).encode('utf-8')
 
+
 class Hello:
     def __init__(self, port):
         self.port = port
 
+    @staticmethod
     def from_raw(raw):
         match = re.match(r'\s*myport=(\d+)\s*$', raw.strip())
         if match is None:
             logging.getLogger('proto.Hello').error('invalid HELLO msg: {}'
-                                                  .format(raw))
+                                                   .format(raw))
             return None
-        
+
         port = int(match.group(1))
 
         return Hello(port)
@@ -89,26 +93,42 @@ class Hello:
     def __bytes__(self):
         return 'HELLO myport={}'.format(self.port).encode('utf-8')
 
+
 class Neighbour:
     '''Tell the remote peer that we now use him as a peer.'''
     def __init__(self):
         pass
 
+    @staticmethod
     def from_raw(raw):
         match = re.match(r'\s*$', raw.strip())
         if match is None:
             logging.getLogger('proto.Neighbour').error('invalid NEIGHBOUR msg: {}'
-                                                  .format(raw))
+                                                       .format(raw))
             return None
-        
+
         return Neighbour()
 
     def __bytes__(self):
         return 'NEIGHBOUR'.encode('utf-8')
+
+
+class Sample:
+    def __init__(self, hashes):
+        self.hashes = hashes
+
+    @staticmethod
+    def from_raw(raw):
+        return Sample(raw.split()[1:])
+
+    def __bytes__(self):
+        return 'SAMPLE {}'.format(' '.join(str(s) for s in self.hashes)).encode()
+
 
 MESSAGE_TYPES = {
     'PING': Ping,
     'PONG': Pong,
     'HELLO': Hello,
     'NEIGHBOUR': Neighbour,
+    'SAMPLE': Sample,
 }

@@ -9,6 +9,7 @@ import logging
 import uuid
 import random
 
+import mpd
 from signalqueue import QueueSet
 import proto
 
@@ -123,6 +124,10 @@ class Overlay(threading.Thread):
         elif cmd == 'user_cmd':
             if payload == 'status':
                 print(self.state)
+            elif payload.startswith('sample'):
+                _, peer = payload.split()
+                peer = self.state['neighbours'][int(peer)]
+                peer.send(proto.Sample(mpd.music.get_sample()))
 
         else:
             self.logger.error('unknown command: {}'.format(cmd))
@@ -271,6 +276,11 @@ class Overlay(threading.Thread):
             self.logger.debug('peer {} added as a neighbour'.format(peer))
             self.state['neighbours'].append(peer)
             peer.send(proto.Neighbour())
+
+        elif isinstance(data, proto.Sample):
+            self.logger.debug('peer {} has send sample'.format(peer))
+            score = mpd.music.check_sample(data.hashes)
+            self.logger.debug('score for sample is {}'.format(score))
 
     def run(self):
         # open up our own listen socket
