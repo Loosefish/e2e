@@ -7,6 +7,9 @@ from hashlib import md5
 
 from mpd.daemon import get_dicts
 
+_hashes = None
+_last_uodate = None
+
 
 def get_songs():
     try:
@@ -14,6 +17,16 @@ def get_songs():
         return [Song(get_dicts('lsinfo "{}"'.format(f))[0]) for f in files]
     except IndexError:
         return []
+
+
+def get_hashes():
+    global _hashes
+    global _last_update
+    last_update = get_dicts('stats')[0]['db_update']
+    if _hashes is None or last_update != _last_update:
+        _hashes = set(md5(bytes(s)).hexdigest() for s in get_songs())
+        _last_update = last_update
+    return _hashes
 
 
 def search_songs(title):
@@ -31,12 +44,11 @@ def get_image(song):
 
 
 def get_sample(size=100):
-    return [md5(bytes(s)).hexdigest() for s in sample(get_songs(), size)]
+    return sample(get_hashes(), size)
 
 
 def check_sample(to_check):
-    hashes = set(md5(bytes(s)).hexdigest() for s in get_songs())
-    return int(len(set(to_check) & hashes) / len(to_check) * 100)
+    return int(len(set(to_check) & get_hashes()) / len(to_check) * 100)
 
 
 class Song(object):
