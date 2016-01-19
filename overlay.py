@@ -270,7 +270,7 @@ class Overlay(threading.Thread):
 
             self.logger.debug('peer {} added as a neighbour'.format(peer))
             self.state['neighbours'].append(peer)
-            new_peer.send(proto.Neighbour())
+            peer.send(proto.Neighbour())
 
     def run(self):
         # open up our own listen socket
@@ -379,7 +379,7 @@ class Peer(threading.Thread):
         after accepting it from a listening socket.'''
 
         new_peer = Peer(conn.getpeername(), inbox, reuse_socket=conn)
-        new_peer.send(proto.Hello(Overlay.my_address))
+        new_peer.send(proto.Hello(Overlay.get_port()))
         return new_peer
 
     def connect(self):
@@ -394,7 +394,7 @@ class Peer(threading.Thread):
             try:
                 self.sock = socket.socket()  # defaults to IPv4 TCP
                 self.sock.connect(self.address)
-                self.send(proto.Hello(Overlay.my_address))
+                self.send(proto.Hello(Overlay.get_port()))
             except OSError:
                 self.sock = None
                 self.state = "disconnected"
