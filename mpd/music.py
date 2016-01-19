@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+from random import sample
 
 from mpd.daemon import get_dicts
 
@@ -28,6 +29,15 @@ def get_image(song):
     return None
 
 
+def get_sample(size=100):
+    return [hash(s) for s in sample(get_songs(), size)]
+
+
+def check_sample(sample):
+    hashes = set(hash(s) for s in get_songs())
+    return int(len(set(sample) & hashes) / len(sample) * 100)
+
+
 class Song(object):
     mpd_keys = {
         'Artist': 'artist',
@@ -46,3 +56,9 @@ class Song(object):
             if k in Song.mpd_keys:
                 self.__setattr__(Song.mpd_keys[k], v)
         self.time = int(self.time)
+
+    def __hash__(self):
+        return hash((self.artist.lower().strip(), self.title.lower().strip(), self.time // 10))
+
+    def __repr__(self):
+        return 'Song' + repr(self.__dict__)
