@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 
-import logging
 import argparse
+import logging
+import readline
 import sys
 
 import overlay
@@ -36,6 +37,11 @@ if __name__ == '__main__':
     overlay_cmd = the_overlay.get_cmd_queue()
     the_overlay.start()
 
+    readline.set_history_length(1000)
     while True:
-        line = sys.stdin.readline().strip()
-        overlay_cmd.put(('keyboard_entered', line))  # TODO
+        line = input()
+        if line in ['x', 'exit']:
+            overlay_cmd.put(('user_cmd', 'exit'))
+            mpd.kill()
+            sys.exit(1)
+        overlay_cmd.put(('user_cmd', line))
