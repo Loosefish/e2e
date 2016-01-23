@@ -9,6 +9,7 @@ import random
 import network
 from network.connection_waiter import ConnectionWaiter
 from network.peer import Peer
+from network.group import GroupLeader, GroupPeer
 
 import mpd
 from signalqueue import QueueSet
@@ -29,6 +30,7 @@ class Overlay(threading.Thread):
             'neighbours': [],
             'joining': None,  # has data when we are currently trying to join
             'pings': dict(),
+            'group': None,
         }
 
         self.queues = QueueSet()
@@ -118,6 +120,12 @@ class Overlay(threading.Thread):
                 _, peer = payload.split()
                 peer = self.state['neighbours'][int(peer)]
                 peer.send(proto.Sample(mpd.music.get_sample()))
+
+            elif payload.startswith('group new'):
+                self.state['group'] = GroupLeader()
+
+            elif payload.startswith('group join'):
+                self.state['group'] = GroupPeer(payload.split()[-1])
 
         else:
             self.logger.error('unknown command: {}'.format(cmd))
