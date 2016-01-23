@@ -5,7 +5,7 @@ import logging
 import readline
 import sys
 
-import overlay
+from network.overlay import Overlay
 import mpd
 
 
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     else:
         peer_addresses = args.remotes
 
-    the_overlay = overlay.Overlay(local_address, peer_addresses)
+    the_overlay = Overlay(local_address, peer_addresses)
     overlay_cmd = the_overlay.get_cmd_queue()
     the_overlay.start()
 

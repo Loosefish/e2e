@@ -1,43 +1,34 @@
-#!/usr/bin/python3
-
-'''The overlay module takes care of joining, managing and searching the
-Gnutella-like overlay.'''
-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import threading
 import socket
 import logging
 import uuid
 import random
 
+import network
+from network.connection_waiter import ConnectionWaiter
+from network.peer import Peer
+
 import mpd
 from signalqueue import QueueSet
 import proto
 
-N_NEIGHBOURS = 2    # number of neighbours every node tries to have
+N_NEIGHBOURS = 2  # number of neighbours every node tries to have
 
 
 class Overlay(threading.Thread):
-    my_address = None  # TODO find cleaner way to make this info available to
-                       # the Peer class
-
-    @staticmethod
-    def get_address():
-        return Overlay.my_address
-
-    @staticmethod
-    def get_port():
-        return Overlay.my_address.split(':')[1]
-
+    '''Takes care of joining, managing and searching the Gnutella-like overlay.'''
     def __init__(self, listenaddress, entrypeers):
         self.logger = logging.getLogger("overlay")
 
         self.listenaddress = listenaddress
-        Overlay.my_address = listenaddress  # TODO validate, prevent injections
+        network.set_address(listenaddress)
         self.entrypeers = entrypeers
 
         self.state = {
             'neighbours': [],
-            'joining': None,   # has data when we are currently trying to join
+            'joining': None,  # has data when we are currently trying to join
             'pings': dict(),
         }
 
@@ -189,7 +180,7 @@ class Overlay(threading.Thread):
             self.state['pings'][p_id] = {
                 'from': peer,
                 'pending': dependencies,  # pongs we're waiting for
-                'collected': set(),  #  peers collected by pongs
+                'collected': set(),  # peers collected by pongs
             }
 
             for n in self.state['pings'][p_id]['pending']:
@@ -292,8 +283,8 @@ class Overlay(threading.Thread):
         self.listen.listen(10)
         self.logger.info('server socket established.')
 
-        self.listenQ = self.queues.New()  # the queue that will be used for
-                                          # signalling new connections
+        # the queue that will be used for signalling new connections
+        self.listenQ = self.queues.New()
 
         self.listen_thread = ConnectionWaiter(self.listen, self.listenQ)
         self.listen_thread.start()
@@ -320,178 +311,3 @@ class Overlay(threading.Thread):
 
             else:
                 self.logger.error('unknown input: {}'.format(data))
-
-
-class ConnectionWaiter(threading.Thread):
-    '''Thread that accepts connections on a listen socket and returns them via
-    a queue.'''
-
-    def __init__(self, sock, q):
-        self.logger = logging.getLogger('listening-socket')
-        self.sock = sock
-        self.q = q
-
-        threading.Thread.__init__(self)
-
-    def run(self):
-        while True:
-            try:
-                (conn, addr) = self.sock.accept()
-                self.logger.debug('new TCP connection from {}'.format(addr))
-
-                self.q.put(conn)
-            except OSError as e:
-                self.logger.exception(e)
-
-
-class Peer(threading.Thread):
-    # TODO differentiate sending/receiving socket ???
-    def __init__(self, address, inbox, reuse_socket=None):
-        self.address = Peer.parse_address(address)
-        self.logger = logging.getLogger('peer')
-
-        self.socket_lock = threading.Lock()
-
-        self.inbox = inbox  # the queue object to store incoming messages in
-
-        if reuse_socket is not None:
-            self.sock = reuse_socket
-            self.state = "connected"
-        else:
-            self.sock = None  # the socket used for communication
-            self.state = "disconnected"
-
-        threading.Thread.__init__(self)
-
-    def parse_address(s):
-        '''Parse an <ip>:<port> string into a proper tuple.'''
-        try:
-            # do not convert if already an (ip,port)-tuple
-            (a, b) = s
-            return s
-        except (TypeError, ValueError):
-            pass
-
-        try:
-            return ('127.0.0.1', int(s))
-        except ValueError:
-            pass
-
-        try:
-            host, port = s.split(':')
-            return (host.strip(), int(port))
-        except ValueError:
-            raise ValueError('invalid host/port: {}'.format(s))
-
-    @staticmethod
-    def from_connection(conn, inbox):
-        '''Construct a Peer object from an already-established connection, e.g.
-        after accepting it from a listening socket.'''
-
-        new_peer = Peer(conn.getpeername(), inbox, reuse_socket=conn)
-        new_peer.send(proto.Hello(Overlay.get_port()))
-        return new_peer
-
-    def connect(self):
-        if self.address is None:
-            raise ValueError('cannot connect to peer without address')
-        if self.state != "disconnected":
-            self.logger.warning('peer is already connected')
-            return
-
-        self.state = "connecting"
-        with self.socket_lock:
-            try:
-                self.sock = socket.socket()  # defaults to IPv4 TCP
-                self.sock.connect(self.address)
-                self.send(proto.Hello(Overlay.get_port()))
-            except OSError:
-                self.sock = None
-                self.state = "disconnected"
-                raise
-
-            self.state = "connected"
-
-    def get_state(self):
-        return self.state
-
-    def get_address(self):
-        return self.address
-
-    def get_address_str(self):
-        ip, port = self.get_address()
-        return '{}:{}'.format(ip, port)
-
-    def disconnect(self):
-        self.logger.debug('closing connection to peer {}'.format(self))
-        self.sock.shutdown(socket.SHUT_WR)
-        self.state = "disconnected"
-
-    def send(self, message):
-        '''Send a protocol message to the remote peer'''
-
-        # TODO handle blocking calls -> may lead to a global deadlock, because
-        # it's the big overlay handler thread that is blocking here!
-        try:
-            self.sock.send(bytes(message) + b'\n')
-        except OSError as e:
-            # do not propagate this error, the reveiver part will report an
-            # error if the connection was closed (we don't handle half-closed
-            # connctions as we don't "use" them)
-            self.logger.exception(e)
-
-    def __str__(self):
-        return '{}'.format(self.get_address())
-
-    def run(self):
-        '''Run to infinity, reading lines from the socket and putting them as
-        protocol messages into the given inbox queue.'''
-
-        # TODO evaluate if we need synchronisation with writers here.
-        # If so, use selectors and only read (and lock!) when there is
-        # something to read.
-
-        msg = bytes()
-        while True:
-            try:
-                data = self.sock.recv(1)  # TODO more efficient, buffering
-            except OSError as e:
-                data = None
-                self.logger.warning('error reading from socket: {}'.format(e.strerror))
-
-            if data is None or len(data) == 0:
-                self.logger.info('TCP connection was closed')
-
-                try:
-                    # in case our side was not yet shut down
-                    self.sock.shutdown(socket.SHUT_WR)
-                except OSError as e:
-                    if e.errno != 107:
-                        raise
-
-                self.sock.close()
-                self.inbox.put(None)
-                return
-
-            if data == b'\n':
-                parsed = proto.parse(msg)
-                msg = bytes()
-
-                if isinstance(parsed, proto.Hello):
-                    # update the remote port
-
-                    ip, port = self.address
-                    new_port = parsed.get_port()
-                    self.logger.debug('remote server port is now known as {} (was: {})'
-                                      .format(new_port, port))
-                    self.address = (ip, new_port)
-                    continue
-
-                self.inbox.put(parsed)
-
-                if parsed is None:
-                    self.sock.shutdown(socket.SHUT_RDWR)
-                    self.sock.close()
-                    return
-            else:
-                msg += data
