@@ -5,6 +5,7 @@ import logging
 import readline
 import sys
 
+import network
 from network.overlay import Overlay
 import mpd
 
@@ -16,6 +17,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('music')
     parser.add_argument('address')
+    parser.add_argument('overlay_port')
+    parser.add_argument('group_port')
     parser.add_argument('-c', '--connect', action='store', nargs='+',
                         dest='remotes')
 
@@ -27,13 +30,14 @@ if __name__ == '__main__':
 
     mpd.run(args.music)
 
-    local_address = args.address
+    network.set_address(args.address, args.overlay_port)
+    network.set_group_port(args.group_port)
     if args.remotes is None:
         peer_addresses = None
     else:
         peer_addresses = args.remotes
 
-    the_overlay = Overlay(local_address, peer_addresses)
+    the_overlay = Overlay(peer_addresses)
     overlay_cmd = the_overlay.get_cmd_queue()
     the_overlay.start()
 

@@ -4,14 +4,14 @@ import threading
 import socket
 import logging
 
-from network import get_port
+from network import get_port, parse_address
 import proto
 
 
 class Peer(threading.Thread):
     # TODO differentiate sending/receiving socket ???
     def __init__(self, address, inbox, reuse_socket=None):
-        self.address = Peer.parse_address(address)
+        self.address = parse_address(address)
         self.logger = logging.getLogger('peer')
 
         self.socket_lock = threading.Lock()
@@ -26,26 +26,6 @@ class Peer(threading.Thread):
             self.state = "disconnected"
 
         threading.Thread.__init__(self)
-
-    def parse_address(s):
-        '''Parse an <ip>:<port> string into a proper tuple.'''
-        try:
-            # do not convert if already an (ip,port)-tuple
-            (a, b) = s
-            return s
-        except (TypeError, ValueError):
-            pass
-
-        try:
-            return ('127.0.0.1', int(s))
-        except ValueError:
-            pass
-
-        try:
-            host, port = s.split(':')
-            return (host.strip(), int(port))
-        except ValueError:
-            raise ValueError('invalid host/port: {}'.format(s))
 
     @staticmethod
     def from_connection(conn, inbox):

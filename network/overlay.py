@@ -19,11 +19,10 @@ N_NEIGHBOURS = 2  # number of neighbours every node tries to have
 
 class Overlay(threading.Thread):
     '''Takes care of joining, managing and searching the Gnutella-like overlay.'''
-    def __init__(self, listenaddress, entrypeers):
+    def __init__(self, entrypeers):
         self.logger = logging.getLogger("overlay")
 
-        self.listenaddress = listenaddress
-        network.set_address(listenaddress)
+        self.listenaddress = network.get_address()
         self.entrypeers = entrypeers
 
         self.state = {
@@ -279,7 +278,7 @@ class Overlay(threading.Thread):
         self.listen = socket.socket()
         self.logger.debug('trying to listen on {}...'.format(self.listenaddress))
 
-        self.listen.bind(Peer.parse_address(self.listenaddress))
+        self.listen.bind(network.parse_address(self.listenaddress))
         self.listen.listen(10)
         self.logger.info('server socket established.')
 
