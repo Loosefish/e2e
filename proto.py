@@ -146,6 +146,24 @@ class GroupJoin:
         return 'GJOIN myport={}'.format(self.port).encode()
 
 
+class GroupInfo:
+    def __init__(self, leader, peers):
+        self.leader = leader
+        self.peers = peers
+
+    @staticmethod
+    def from_raw(raw):
+        leader, peers = raw.split()
+        peers = peers.split(',')
+        if peers[0] == '':
+            peers = None
+        return GroupInfo(leader, peers)
+
+    def __bytes__(self):
+        peers = ','.join(self.peers)
+        return 'GINFO leader={} peers={}'.format(self.leader, peers).encode()
+
+
 MESSAGE_TYPES = {
     'PING': Ping,
     'PONG': Pong,
@@ -153,4 +171,5 @@ MESSAGE_TYPES = {
     'NEIGHBOUR': Neighbour,
     'SAMPLE': Sample,
     'GJOIN': GroupJoin,
+    'GINFO': GroupInfo,
 }
