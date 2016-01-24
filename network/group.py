@@ -6,14 +6,15 @@ import socketserver
 import threading
 
 import network
-
-# TODO: Use proto messages!
+import proto
 
 
 class GroupLeader(socketserver.TCPServer):
     '''Create new group with local peer as leader'''
     def __init__(self):
         self.logger = logging.getLogger('group_leader')
+
+        self.peers = set()
 
         address = network.parse_address(network.get_group_address())
 
@@ -27,10 +28,12 @@ class GroupLeader(socketserver.TCPServer):
 class GroupLeaderHandler(socketserver.StreamRequestHandler):
     '''Handler for incoming group messages'''
     def handle(self):
-        data = str(self.rfile.readline().strip(), 'utf-8')
-        self.server.logger.debug('received "{}" from {}'.format(data, self.client_address[0]))
-        if data.startswith('JOIN'):
-            self.wfile.write(bytes('OK\n', 'utf-8'))
+        msg = proto.parse(self.rfile.readline())
+        if isinstance(msg, proto.GroupJoin):
+            self.server.logger\
+                .debug('join request from {} ({})'.format(self.client_address[0], msg.port))
+            self.peers.add((self.client_address[0], msg.port))
+            self.wfile.write(bytes(proto.GroupJoin(network.get_group_port())) + b'\n')
 
 
 class GroupPeer(socketserver.TCPServer):
@@ -38,7 +41,6 @@ class GroupPeer(socketserver.TCPServer):
     def __init__(self, leader_adr):
         self.logger = logging.getLogger('group_peer')
 
-        address = network.parse_address(network.get_group_address())
         self.leader_adr = leader_adr
 
         self.logger.debug('contacting leader at {}'.format(leader_adr))
@@ -47,11 +49,13 @@ class GroupPeer(socketserver.TCPServer):
         sock.settimeout(10)  # TODO: Handle timeout exception
         sock.connect(network.parse_address(leader_adr))
 
-        sock.sendall(bytes('JOIN {}\n'.format(address), 'utf-8'))
-        data = str(sock.recv(1024), 'utf-8')
-        if data == 'OK\n':
+        sock.sendall(bytes(proto.GroupJoin(network.get_group_port())) + b'\n')
+        msg = proto.parse(sock.recv(1024))
+        if isinstance(msg, proto.GroupJoin):
+            address = network.get_group_address()
+            self.logger.debug('leader answered {}'.format(msg.port))
             self.logger.info('starting group peer server on {}'.format(address))
-            super().__init__(address, GroupPeerHandler)
+            super().__init__(network.parse_address(address), GroupPeerHandler)
             self.thread = threading.Thread(target=self.serve_forever)
             self.thread.start()
 

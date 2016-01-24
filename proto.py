@@ -119,10 +119,31 @@ class Sample:
 
     @staticmethod
     def from_raw(raw):
-        return Sample(raw.split()[1:])
+        return Sample(raw.split())
 
     def __bytes__(self):
         return 'SAMPLE {}'.format(' '.join(str(s) for s in self.hashes)).encode()
+
+
+class GroupJoin:
+    regex = re.compile(r'\s*myport=(\d+)\s*$')
+
+    def __init__(self, port):
+        self.port = port
+
+    @staticmethod
+    def from_raw(raw):
+        match = GroupJoin.regex.match(raw.strip())
+        if match is None:
+            logging.getLogger('proto.GroupJoin')\
+                .error('invalid msg: {}'.format(raw))
+            return None
+
+        port = int(match.group(1))
+        return GroupJoin(port)
+
+    def __bytes__(self):
+        return 'GJOIN myport={}'.format(self.port).encode()
 
 
 MESSAGE_TYPES = {
@@ -131,4 +152,5 @@ MESSAGE_TYPES = {
     'HELLO': Hello,
     'NEIGHBOUR': Neighbour,
     'SAMPLE': Sample,
+    'GJOIN': GroupJoin,
 }
