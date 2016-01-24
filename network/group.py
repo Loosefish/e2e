@@ -24,18 +24,22 @@ class GroupLeader(socketserver.TCPServer):
         self.thread = threading.Thread(target=self.serve_forever)
         self.thread.start()
 
+    def add_peer(self, a, p):
+        self.peers.add('{}:{}'.format(a, p))
+
 
 class GroupLeaderHandler(socketserver.StreamRequestHandler):
     '''Handler for incoming group messages'''
     def handle(self):
         msg = proto.parse(self.rfile.readline())
         if isinstance(msg, proto.GroupJoin):
-            # Peer wants to join group
+            # peer wants to join group
             self.server.logger\
                 .debug('join request from {} ({})'.format(self.client_address[0], msg.port))
-            answer = bytes(proto.GroupInfo(network.get_group_address(), self.server.peers)) + b'\n'
+            # answer with GroupInfo
+            answer = bytes(proto.GroupInfo(network.get_group_address(), self.server.peers))
             self.wfile.write(answer)
-            self.server.peers.add('{}:{}'.format(self.client_address[0], msg.port))
+            self.server.add_peer(self.client_address[0], msg.port)
 
 
 class GroupPeer(socketserver.TCPServer):
@@ -47,20 +51,23 @@ class GroupPeer(socketserver.TCPServer):
 
         self.logger.debug('contacting leader at {}'.format(leader))
 
+        # try to contact group leader with GroupJoin
         sock = socket.socket()
         sock.settimeout(10)  # TODO: Handle timeout exception
         sock.connect(network.parse_address(leader))
+        sock.sendall(bytes(proto.GroupJoin(network.get_group_port())))
 
-        sock.sendall(bytes(proto.GroupJoin(network.get_group_port())) + b'\n')
+        # group leader should answer with GroupInfo
         data = sock.recv(4096)
-        self.logger.debug('leader answered "{}"'.format(data))
         msg = proto.parse(data)
         if isinstance(msg, proto.GroupInfo):
             address = network.get_group_address()
-            self.logger.info('starting group peer server on {}'.format(address))
+            self.logger.info('join succesful - starting peer server on {}'.format(address))
             super().__init__(network.parse_address(address), GroupPeerHandler)
             self.thread = threading.Thread(target=self.serve_forever)
             self.thread.start()
+        else:
+            raise GroupException
 
 
 class GroupPeerHandler(socketserver.StreamRequestHandler):
@@ -68,3 +75,7 @@ class GroupPeerHandler(socketserver.StreamRequestHandler):
     def handle(self):
         data = self.rfile.readline().strip()
         self.server.logger.debug('received "{}" from {}'.format(data, self.client_address[0]))
+
+
+class GroupException(Exception):
+    pass

@@ -77,7 +77,7 @@ class Peer(threading.Thread):
         # TODO handle blocking calls -> may lead to a global deadlock, because
         # it's the big overlay handler thread that is blocking here!
         try:
-            self.sock.send(bytes(message) + b'\n')
+            self.sock.send(bytes(message))
         except OSError as e:
             # do not propagate this error, the reveiver part will report an
             # error if the connection was closed (we don't handle half-closed

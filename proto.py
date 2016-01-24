@@ -40,7 +40,7 @@ class Ping:
         return self.ttl
 
     def __bytes__(self):
-        return 'PING id={} ttl={}'.format(self.ping_id, self.ttl).encode('utf-8')
+        return 'PING id={} ttl={}\n'.format(self.ping_id, self.ttl).encode('utf-8')
 
 
 class Pong:
@@ -68,7 +68,7 @@ class Pong:
         return self.addrs
 
     def __bytes__(self):
-        return 'PONG id={} peers={}'.format(self.ping_id, ','.join(self.addrs)).encode('utf-8')
+        return 'PONG id={} peers={}\n'.format(self.ping_id, ','.join(self.addrs)).encode('utf-8')
 
 
 class Hello:
@@ -91,7 +91,7 @@ class Hello:
         return self.port
 
     def __bytes__(self):
-        return 'HELLO myport={}'.format(self.port).encode('utf-8')
+        return 'HELLO myport={}\n'.format(self.port).encode('utf-8')
 
 
 class Neighbour:
@@ -110,7 +110,7 @@ class Neighbour:
         return Neighbour()
 
     def __bytes__(self):
-        return 'NEIGHBOUR'.encode('utf-8')
+        return 'NEIGHBOUR\n'.encode('utf-8')
 
 
 class Sample:
@@ -122,7 +122,7 @@ class Sample:
         return Sample(raw.split())
 
     def __bytes__(self):
-        return 'SAMPLE {}'.format(' '.join(str(s) for s in self.hashes)).encode()
+        return 'SAMPLE {}\n'.format(' '.join(str(s) for s in self.hashes)).encode()
 
 
 class GroupJoin:
@@ -143,7 +143,7 @@ class GroupJoin:
         return GroupJoin(port)
 
     def __bytes__(self):
-        return 'GJOIN myport={}'.format(self.port).encode()
+        return 'GJOIN myport={}\n'.format(self.port).encode()
 
 
 class GroupInfo:
@@ -161,7 +161,7 @@ class GroupInfo:
 
     def __bytes__(self):
         peers = ','.join(self.peers)
-        return 'GINFO leader={} peers={}'.format(self.leader, peers).encode()
+        return 'GINFO leader={} peers={}\n'.format(self.leader, peers).encode()
 
 
 MESSAGE_TYPES = {
