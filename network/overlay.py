@@ -121,11 +121,12 @@ class Overlay(threading.Thread):
                 peer = self.state['neighbours'][int(peer)]
                 peer.send(proto.Sample(mpd.music.get_sample()))
 
-            elif payload.startswith('group new'):
-                self.state['group'] = GroupLeader()
-
-            elif payload.startswith('group join'):
-                self.state['group'] = GroupPeer(payload.split()[-1])
+            elif payload.startswith('g'):
+                group_cmd = payload.split()[1]
+                if group_cmd == 'new':
+                    self.state['group'] = GroupLeader()
+                elif group_cmd == 'join':
+                    self.state['group'] = GroupPeer(payload.split()[-1])
 
         else:
             self.logger.error('unknown command: {}'.format(cmd))

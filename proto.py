@@ -154,14 +154,29 @@ class GroupInfo:
     @staticmethod
     def from_raw(raw):
         leader, peers = raw.split()
-        peers = peers.split(',')
+        leader = leader.split('=')[1]
+        peers = peers.split('=')[1].split(',')
         if peers[0] == '':
-            peers = None
+            peers = set()
+        else:
+            peers = set(peers)
         return GroupInfo(leader, peers)
 
     def __bytes__(self):
         peers = ','.join(self.peers)
         return 'GINFO leader={} peers={}\n'.format(self.leader, peers).encode()
+
+
+class GroupMusic:
+    def __init__(self, hashes):
+        self.hashes = hashes
+
+    @staticmethod
+    def from_raw(raw):
+        return GroupMusic(raw.split())
+
+    def __bytes__(self):
+        return 'GMUSIC {}\n'.format(' '.join(str(s) for s in self.hashes)).encode()
 
 
 MESSAGE_TYPES = {
@@ -172,4 +187,5 @@ MESSAGE_TYPES = {
     'SAMPLE': Sample,
     'GJOIN': GroupJoin,
     'GINFO': GroupInfo,
+    'GMUSIC': GroupMusic,
 }

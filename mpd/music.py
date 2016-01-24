@@ -24,9 +24,9 @@ def get_hashes():
     global _last_update
     last_update = get_dicts('stats')[0]['db_update']
     if _hashes is None or last_update != _last_update:
-        _hashes = set(md5(bytes(s)).hexdigest() for s in get_songs())
+        _hashes = dict((md5(bytes(s)).hexdigest(), s) for s in get_songs())
         _last_update = last_update
-    return _hashes
+    return _hashes.keys()
 
 
 def search_songs(title):
