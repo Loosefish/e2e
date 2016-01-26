@@ -28,7 +28,7 @@ def run(music_dir):
         f.write('db_file "{}"\n'.format(mpd_db))
         f.write('log_file "syslog"\n')
         f.write('bind_to_address "{}"\n'.format(mpd_socket))
-        f.write('music_directory "{}"\n'.format(music_dir))
+        f.write('music_directory "{}"\n'.format(os.path.abspath(music_dir)))
 
     logger.debug('created mpd config in {}'.format(mpd_dir))
     logger.debug('starting on {}...'.format(mpd_socket))
