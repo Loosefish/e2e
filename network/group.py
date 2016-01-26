@@ -47,7 +47,7 @@ class GroupLeader(MusicMixin, socketserver.TCPServer):
 
     def send_all(self, m):
         for p in self.peers:
-            self.send_peer(p, m)
+            GroupLeader.send_peer(p, m)
 
     @staticmethod
     def send_peer(p, m):
@@ -57,10 +57,11 @@ class GroupLeader(MusicMixin, socketserver.TCPServer):
             sock.sendall(bytes(m))
 
 
-class GroupLeaderHandler(ServerLogger, socketserver.StreamRequestHandler):
+class GroupLeaderHandler(ServerLogger, socketserver.BaseRequestHandler):
     '''Handler for incoming group messages'''
     def handle(self):
-        msg = proto.parse(self.rfile.readline())
+        # msg = proto.parse(self.rfile.readline())
+        msg = proto.receive(self.request)
         self.logger.debug('received {}'.format(type(msg)))
 
         if isinstance(msg, proto.GroupJoin):
@@ -68,7 +69,7 @@ class GroupLeaderHandler(ServerLogger, socketserver.StreamRequestHandler):
             self.logger.debug('join request from {} ({})'.format(self.client_address[0], msg.port))
             # answer with GroupInfo
             answer = bytes(proto.GroupInfo(network.get_group_address(), self.server.peers))
-            self.wfile.write(answer)
+            self.request.sendall(answer)
             self.server.add_peer(self.client_address[0], msg.port)
 
         elif isinstance(msg, proto.GroupMusic):
@@ -98,15 +99,20 @@ class GroupPeer(MusicMixin, socketserver.TCPServer):
         self.logger.debug('contacting leader at {}'.format(leader))
         self.send_leader(proto.GroupJoin(network.get_group_port()))
 
+    def update_peers(self, ps):
+        self.peers = ps - {network.get_group_address()}
+        self.logger.debug('updating peers: {}'.format(self.peers))
+
     def update(self, info):
         '''Update group from GroupInfo message'''
+        self.update_peers(info.peers)
         if self.join_pending:
             # first GroupInfo - get leader and peers
             self.leader = info.leader
-            self.peers = info.peers
             self.join_pending = False
             # send GroupMusic to leader
             self.send_leader(proto.GroupMusic(self.music))
+            self.logger.debug('group join complete')
 
     def send_leader(self, m):
         self.logger.debug('sending {} to leader {}'.format(m, self.leader))
@@ -116,15 +122,15 @@ class GroupPeer(MusicMixin, socketserver.TCPServer):
             sock.sendall(bytes(m))
 
 
-class GroupPeerHandler(ServerLogger, socketserver.StreamRequestHandler):
+class GroupPeerHandler(ServerLogger, socketserver.BaseRequestHandler):
     '''Handler for incoming group messages'''
     def handle(self):
-        msg = proto.parse(self.rfile.readline().strip())
+        # msg = proto.parse(self.rfile.readline().strip())
+        msg = proto.receive(self.request)
         self.logger.debug('received {}'.format(type(msg)))
-        if isinstance(msg, proto.GroupInfo) and self.server.join_pending:
-            # first GroupInfo arrived
+        if isinstance(msg, proto.GroupInfo):
+            # GroupInfo arrived
             self.server.update(msg)
-            self.logger.debug('group join complete')
 
         elif isinstance(msg, proto.GroupMusic):
             self.server.update_music(msg.hashes)

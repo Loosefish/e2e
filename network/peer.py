@@ -95,15 +95,15 @@ class Peer(threading.Thread):
         # If so, use selectors and only read (and lock!) when there is
         # something to read.
 
-        msg = bytes()
+        msg = None
         while True:
             try:
-                data = self.sock.recv(1)  # TODO more efficient, buffering
+                msg = proto.receive(self.sock)
             except OSError as e:
-                data = None
+                msg = None
                 self.logger.warning('error reading from socket: {}'.format(e.strerror))
 
-            if data is None or len(data) == 0:
+            if msg is None:
                 self.logger.info('TCP connection was closed')
 
                 try:
@@ -117,25 +117,18 @@ class Peer(threading.Thread):
                 self.inbox.put(None)
                 return
 
-            if data == b'\n':
-                parsed = proto.parse(msg)
-                msg = bytes()
+            if isinstance(msg, proto.Hello):
+                # update the remote port
+                ip, port = self.address
+                new_port = msg.get_port()
+                self.logger.debug('remote server port is now known as {} (was: {})'
+                                  .format(new_port, port))
+                self.address = (ip, new_port)
+                continue
 
-                if isinstance(parsed, proto.Hello):
-                    # update the remote port
+            self.inbox.put(msg)
 
-                    ip, port = self.address
-                    new_port = parsed.get_port()
-                    self.logger.debug('remote server port is now known as {} (was: {})'
-                                      .format(new_port, port))
-                    self.address = (ip, new_port)
-                    continue
-
-                self.inbox.put(parsed)
-
-                if parsed is None:
-                    self.sock.shutdown(socket.SHUT_RDWR)
-                    self.sock.close()
-                    return
-            else:
-                msg += data
+            if msg is None:
+                self.sock.shutdown(socket.SHUT_RDWR)
+                self.sock.close()
+                return

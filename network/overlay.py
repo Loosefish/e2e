@@ -172,7 +172,7 @@ class Overlay(threading.Thread):
             if ttl == 0 or len(dependencies) == 0:
                 # do not recurse
                 self.logger.debug('answering with PONG directly')
-                peer.send(proto.Pong(p_id, []))
+                peer.send(proto.Pong(p_id))
                 if peer not in self.state['neighbours']:
                     # keep connection to neighbours alive
                     peer.disconnect()
@@ -182,7 +182,7 @@ class Overlay(threading.Thread):
             if p_id in self.state['pings']:
                 self.logger.debug('already know ping {}, send empty Pong'
                                   .format(p_id))
-                peer.send(proto.Pong(p_id, []))
+                peer.send(proto.Pong(p_id))
                 return
 
             self.state['pings'][p_id] = {
