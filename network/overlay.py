@@ -34,7 +34,7 @@ class Overlay(threading.Thread):
         }
 
         self.group_pings = dict()
-        self.group_candidates = set()
+        self.group_candidates = dict()
 
         self.queues = QueueSet()
         self.cmdqueue = self.queues.New()  # commands by the user
@@ -86,9 +86,9 @@ class Overlay(threading.Thread):
                 # We're in a group, so we should answer
                 self.logger.debug('reply with group pong to {}'.format(sender.address))
                 if isinstance(self.group, GroupLeader):
-                    m = proto.GroupPong(ping.ping_id, network.get_group_address())
+                    m = proto.GroupPong(ping.ping_id, network.get_group_address(), self.group.music)
                 elif isinstance(self.group, GroupPeer):
-                    m = proto.GroupPong(ping.ping_id, self.group.leader)
+                    m = proto.GroupPong(ping.ping_id, self.group.leader, self.group.music)
                 sender.send(m)
 
     def handle_group_pong(self, sender, pong):
@@ -102,7 +102,9 @@ class Overlay(threading.Thread):
             else:
                 # we pinged
                 self.logger.debug('received pong with group candidate {}'.format(pong.leader))
-                self.group_candidates.add(pong.leader)
+                score = mpd.music.check_sample(pong.music)
+                self.logger.debug('score for pong is {}'.format(score))
+                self.group_candidates[score] = pong.leader
 
     def _listen_event(self, data):
         self.logger.info('new incoming peer connection')
@@ -181,7 +183,12 @@ class Overlay(threading.Thread):
                 if group_cmd == 'new':
                     self.group = GroupLeader()
                 elif group_cmd == 'join':
-                    self.group = GroupPeer(payload.split()[-1])
+                    if len(payload.split()) > 2:
+                        self.group = GroupPeer(payload.split()[-1])
+                    elif self.group_candidates:
+                        best = max(self.group_candidates.keys())
+                        self.group = GroupPeer(self.group_candidates[best])
+                        self.group_candidates = dict()
                 elif group_cmd == 'find':
                     self.find_group()
                 elif group_cmd == 'leave' and self.group:

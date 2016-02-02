@@ -32,6 +32,7 @@ class GroupPing(PicklingMessage):
 
 
 class GroupPong(PicklingMessage):
-    def __init__(self, ping_id, leader):
+    def __init__(self, ping_id, leader, music):
         self.ping_id = ping_id
         self.leader = leader
+        self.music = music
