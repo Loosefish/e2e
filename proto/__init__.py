@@ -3,7 +3,7 @@
 import logging
 import pickle
 
-from proto.group import GroupJoin, GroupInfo, GroupMusic, GroupLeave
+from proto.group import GroupJoin, GroupInfo, GroupMusic, GroupLeave, GroupPing, GroupPong
 from proto.peer import Hello, Neighbour, Sample
 from proto.ping import Ping, Pong
 
@@ -24,7 +24,6 @@ def receive(sock):
         b = sock.recv(1)
         length += b
 
-    logging.getLogger('proto').debug('receive length as "{}"'.format(length))
     length = int(length.decode())
     data = b''
     while length > 0:

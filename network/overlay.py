@@ -33,6 +33,9 @@ class Overlay(threading.Thread):
             'group': None,
         }
 
+        self.group_pings = dict()
+        self.group_candidates = set()
+
         self.queues = QueueSet()
         self.cmdqueue = self.queues.New()  # commands by the user
 
@@ -57,6 +60,49 @@ class Overlay(threading.Thread):
         issue commands (overlay operations).'''
 
         return self.cmdqueue
+
+    def find_group(self):
+        ping_id = uuid.uuid4()
+        message = proto.GroupPing(ping_id)
+        self.group_pings[ping_id] = []
+        for p in self.state['neighbours']:
+            self.logger.debug('sending group ping to {}'.format(p.address))
+            self.group_pings[ping_id] = None
+            p.send(message)
+
+    def handle_group_ping(self, sender, ping):
+        if ping.ping_id in self.group_pings:
+            # We've seen this ping, do nothing
+            self.logger.debug('known ping -> ignore')
+        else:
+            # We've not seen this ping, flood
+            self.group_pings[ping.ping_id] = sender
+            ping.ttl -= 1
+            for p in self.state['neighbours']:
+                self.logger.debug('forwarding group ping to {}'.format(p.address))
+                p.send(ping)
+
+            if self.group:
+                # We're in a group, so we should answer
+                self.logger.debug('reply with group pong to {}'.format(sender.address))
+                if isinstance(self.group, GroupLeader):
+                    m = proto.GroupPong(ping.ping_id, network.get_group_address())
+                elif isinstance(self.group, GroupPeer):
+                    m = proto.GroupPong(ping.ping_id, self.group.leader)
+                sender.send(m)
+
+    def handle_group_pong(self, sender, pong):
+        if pong.ping_id in self.group_pings:
+            # pong is excpected
+            original_sender = self.group_pings[pong.ping_id]
+            if original_sender:
+                # reverse path route pong
+                self.logger.debug('reverse route pong to {}'.format(original_sender.address))
+                original_sender.send(pong)
+            else:
+                # we pinged
+                self.logger.debug('received pong with group candidate {}'.format(pong.leader))
+                self.group_candidates.add(pong.leader)
 
     def _listen_event(self, data):
         self.logger.info('new incoming peer connection')
@@ -136,6 +182,8 @@ class Overlay(threading.Thread):
                     self.group = GroupLeader()
                 elif group_cmd == 'join':
                     self.group = GroupPeer(payload.split()[-1])
+                elif group_cmd == 'find':
+                    self.find_group()
                 elif group_cmd == 'leave' and self.group:
                     self.group.leave()
                     self.group = None
@@ -295,6 +343,12 @@ class Overlay(threading.Thread):
             self.logger.debug('peer {} has send sample'.format(peer))
             score = mpd.music.check_sample(data.hashes)
             self.logger.debug('score for sample is {}'.format(score))
+
+        elif isinstance(data, proto.GroupPing):
+            self.handle_group_ping(peer, data)
+
+        elif isinstance(data, proto.GroupPong):
+            self.handle_group_pong(peer, data)
 
     def run(self):
         # open up our own listen socket

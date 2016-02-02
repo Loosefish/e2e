@@ -2,5 +2,5 @@
 *.aux
 *.log
 *.out
-test_data/
+test.sh
 __pycache__/

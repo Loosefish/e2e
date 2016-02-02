@@ -23,3 +23,15 @@ class GroupMusic(PicklingMessage):
 class GroupLeave(PicklingMessage):
     def __init__(self):
         self.port = network.get_group_port()
+
+
+class GroupPing(PicklingMessage):
+    def __init__(self, ping_id, ttl=3):
+        self.ping_id = ping_id
+        self.ttl = ttl
+
+
+class GroupPong(PicklingMessage):
+    def __init__(self, ping_id, leader):
+        self.ping_id = ping_id
+        self.leader = leader
