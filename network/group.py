@@ -10,11 +10,15 @@ import network
 import proto
 
 
-class MusicMixin:
+class BasicGroupServer:
     def update_music(self, hashes):
         # update music by intersection
         self.music = self.music & hashes
         self.logger.debug('updating music {}'.format(len(self.music)))
+
+    def stop(self):
+        self.shutdown()
+        self.server_close()
 
 
 class ServerLogger:
@@ -23,7 +27,7 @@ class ServerLogger:
         return self.server.logger
 
 
-class GroupLeader(MusicMixin, socketserver.TCPServer):
+class GroupLeader(BasicGroupServer, socketserver.TCPServer):
     '''Create new group with local peer as leader'''
     def __init__(self):
         self.logger = logging.getLogger('group_leader')
@@ -62,6 +66,11 @@ class GroupLeader(MusicMixin, socketserver.TCPServer):
             sock.connect(network.parse_address(p))
             sock.sendall(bytes(m))
 
+    def leave(self):
+        self.stop()
+        m = proto.GroupLeave()
+        self.send_all(m)
+
 
 class GroupLeaderHandler(ServerLogger, socketserver.BaseRequestHandler):
     '''Handler for incoming group messages'''
@@ -85,7 +94,7 @@ class GroupLeaderHandler(ServerLogger, socketserver.BaseRequestHandler):
             self.server.remove_peer(self.client_address[0], msg.port)
 
 
-class GroupPeer(MusicMixin, socketserver.TCPServer):
+class GroupPeer(BasicGroupServer, socketserver.TCPServer):
     '''Try to join a group'''
     def __init__(self, leader):
         self.logger = logging.getLogger('group_peer')
@@ -131,20 +140,22 @@ class GroupPeer(MusicMixin, socketserver.TCPServer):
 
     def leave(self):
         self.logger.debug('leaving group')
-        self.shutdown()
-        self.server_close()
         self.send_leader(proto.GroupLeave())
+        self.stop()
 
 
 class GroupPeerHandler(ServerLogger, socketserver.BaseRequestHandler):
     '''Handler for incoming group messages'''
     def handle(self):
-        # msg = proto.parse(self.rfile.readline().strip())
         msg = proto.receive(self.request)
         self.logger.debug('received {}'.format(type(msg)))
         if isinstance(msg, proto.GroupInfo):
-            # GroupInfo arrived
             self.server.update(msg)
 
         elif isinstance(msg, proto.GroupMusic):
             self.server.update_music(msg.hashes)
+
+        elif isinstance(msg, proto.GroupLeave):
+            # TODO: this is hacky because the overlay still has a reference
+            t = threading.Thread(target=self.server.stop())
+            t.start()

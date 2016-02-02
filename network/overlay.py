@@ -136,10 +136,12 @@ class Overlay(threading.Thread):
                     self.group = GroupLeader()
                 elif group_cmd == 'join':
                     self.group = GroupPeer(payload.split()[-1])
-                elif group_cmd == 'leave':
-                    if isinstance(self.group, GroupPeer):
-                        self.group.leave()
-                        self.group = None
+                elif group_cmd == 'leave' and self.group:
+                    self.group.leave()
+                    self.group = None
+
+            else:
+                self.logger.error('unknown user command: {}'.format(payload))
 
         else:
             self.logger.error('unknown command: {}'.format(cmd))
