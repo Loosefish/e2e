@@ -44,6 +44,14 @@ class Overlay(threading.Thread):
 
         threading.Thread.__init__(self)
 
+    @property
+    def group(self):
+        return self.state['group']
+
+    @group.setter
+    def group(self, value):
+        self.state['group'] = value
+
     def get_cmd_queue(self):
         '''Returns the queue that can be used by the user to interactively
         issue commands (overlay operations).'''
@@ -115,7 +123,8 @@ class Overlay(threading.Thread):
 
         elif cmd == 'user_cmd':
             if payload == 'status':
-                print(self.state)
+                self.print_status()
+
             elif payload.startswith('sample'):
                 _, peer = payload.split()
                 peer = self.state['neighbours'][int(peer)]
@@ -124,13 +133,13 @@ class Overlay(threading.Thread):
             elif payload.startswith('g'):
                 group_cmd = payload.split()[1]
                 if group_cmd == 'new':
-                    self.state['group'] = GroupLeader()
+                    self.group = GroupLeader()
                 elif group_cmd == 'join':
-                    self.state['group'] = GroupPeer(payload.split()[-1])
+                    self.group = GroupPeer(payload.split()[-1])
                 elif group_cmd == 'leave':
-                    if isinstance(self.state['group'], GroupPeer):
-                        self.state['group'].leave()
-                        self.state['group'] = None
+                    if isinstance(self.group, GroupPeer):
+                        self.group.leave()
+                        self.group = None
 
         else:
             self.logger.error('unknown command: {}'.format(cmd))
@@ -323,3 +332,19 @@ class Overlay(threading.Thread):
 
             else:
                 self.logger.error('unknown input: {}'.format(data))
+
+    def print_status(self):
+        print('\n[Peers]')
+        print('\n'.join(':'.join(p.address) for p in self.state['neighbours']))
+
+        print('[Group]')
+        if self.group:
+            print('*{}*'.format(len(self.group.music)))
+            if isinstance(self.group, GroupLeader):
+                print('*leader*')
+            elif isinstance(self.group, GroupPeer):
+                print('*peer*')
+                print(self.group.leader, '*leader*')
+            print('\n'.join(self.group.peers))
+        else:
+            print('*none*')
