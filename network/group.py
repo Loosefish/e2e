@@ -10,11 +10,16 @@ import network
 import proto
 
 
-class BasicGroupServer:
+class BasicGroupServer(socketserver.TCPServer):
     def update_music(self, hashes):
         # update music by intersection
         self.music = self.music & hashes
         self.logger.debug('updating music {}'.format(len(self.music)))
+
+    def show_music(self):
+        songs = ((h, mpd.music.get_song(h)) for h in self.music)
+        songs_txt = sorted('{}  {}  ({})'.format(s.artist, s.title, h) for (h, s) in songs)
+        print('\n'.join(songs_txt))
 
     def stop(self):
         self.shutdown()
@@ -27,7 +32,7 @@ class ServerLogger:
         return self.server.logger
 
 
-class GroupLeader(BasicGroupServer, socketserver.TCPServer):
+class GroupLeader(BasicGroupServer):
     '''Create new group with local peer as leader'''
     def __init__(self):
         self.logger = logging.getLogger('group_leader')
@@ -71,6 +76,12 @@ class GroupLeader(BasicGroupServer, socketserver.TCPServer):
         m = proto.GroupLeave()
         self.send_all(m)
 
+    def add_song(self, song_no):
+        if song_no in self.music:
+            msg = proto.GroupPlaylist.add(song_no)
+            msg.do()
+            self.send_all(msg)
+
 
 class GroupLeaderHandler(ServerLogger, socketserver.BaseRequestHandler):
     '''Handler for incoming group messages'''
@@ -93,8 +104,12 @@ class GroupLeaderHandler(ServerLogger, socketserver.BaseRequestHandler):
             self.logger.debug('peer leaving: {} ({})'.format(self.client_address[0], msg.port))
             self.server.remove_peer(self.client_address[0], msg.port)
 
+        elif isinstance(msg, proto.GroupPlaylist):
+            msg.do()
+            self.server.send_all(msg)
 
-class GroupPeer(BasicGroupServer, socketserver.TCPServer):
+
+class GroupPeer(BasicGroupServer):
     '''Try to join a group'''
     def __init__(self, leader):
         self.logger = logging.getLogger('group_peer')
@@ -138,10 +153,18 @@ class GroupPeer(BasicGroupServer, socketserver.TCPServer):
             sock.connect(network.parse_address(self.leader))
             sock.sendall(bytes(m))
 
+    def send_all(self, m):
+        self.send_leader(m)
+
     def leave(self):
         self.logger.debug('leaving group')
         self.send_leader(proto.GroupLeave())
         self.stop()
+
+    def add_song(self, song_no):
+        if song_no in self.music:
+            msg = proto.GroupPlaylist.add(song_no)
+            self.send_all(msg)
 
 
 class GroupPeerHandler(ServerLogger, socketserver.BaseRequestHandler):
@@ -159,3 +182,6 @@ class GroupPeerHandler(ServerLogger, socketserver.BaseRequestHandler):
             # TODO: this is hacky because the overlay still has a reference
             t = threading.Thread(target=self.server.stop())
             t.start()
+
+        elif isinstance(msg, proto.GroupPlaylist):
+            msg.do()

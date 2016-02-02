@@ -12,6 +12,7 @@ from network.peer import Peer
 from network.group import GroupLeader, GroupPeer
 
 import mpd
+import mpd.playlist
 from signalqueue import QueueSet
 import proto
 
@@ -194,6 +195,10 @@ class Overlay(threading.Thread):
                 elif group_cmd == 'leave' and self.group:
                     self.group.leave()
                     self.group = None
+                elif group_cmd == 'music':
+                    self.group.show_music()
+                elif group_cmd == 'add':
+                    self.group.add_song(payload.split()[-1])
 
             else:
                 self.logger.error('unknown user command: {}'.format(payload))
@@ -411,3 +416,7 @@ class Overlay(threading.Thread):
             print('\n'.join(self.group.peers))
         else:
             print('*none*')
+
+        print('[Playlist]')
+        print('\n'.join('{}: {}  {}'.format(i, s.artist, s.title)
+                        for (i, s) in enumerate(mpd.playlist.get())))

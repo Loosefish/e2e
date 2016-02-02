@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from mpd.music import Song, Album
+from mpd.music import Song
 from mpd.daemon import get_dicts, get_query
 
 
