@@ -38,14 +38,13 @@ if __name__ == '__main__':
         peer_addresses = args.remotes
 
     the_overlay = Overlay(peer_addresses)
-    overlay_cmd = the_overlay.get_cmd_queue()
     the_overlay.start()
 
     readline.set_history_length(1000)
     while True:
         line = input()
         if line in ['x', 'exit']:
-            overlay_cmd.put(('user_cmd', 'exit'))
+            the_overlay.put_cmd(('user_cmd', 'exit'))
             mpd.kill()
-            sys.exit(1)
-        overlay_cmd.put(('user_cmd', line))
+            sys.exit()
+        the_overlay.put_cmd(('user_cmd', line))

@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import threading
-import socket
 import logging
-import uuid
 import random
-
-import network
-from network.connection_waiter import ConnectionWaiter
-from network.peer import Peer
-from network.group import GroupLeader, GroupPeer
+import socket
+import threading
+import uuid
 
 import mpd
 import mpd.playlist
-from signalqueue import QueueSet
+import network
+from network.connection_waiter import ConnectionWaiter
+from network.group import GroupLeader, GroupPeer
+from network.peer import Peer
 import proto
+from signalqueue import QueueSet
 
 N_NEIGHBOURS = 2  # number of neighbours every node tries to have
 
@@ -32,10 +31,9 @@ class Overlay(threading.Thread):
             'joining': None,  # has data when we are currently trying to join
             'pings': dict(),
             'group': None,
+            'group_pings': dict(),
+            'group_candidates': dict()
         }
-
-        self.group_pings = dict()
-        self.group_candidates = dict()
 
         self.queues = QueueSet()
         self.cmdqueue = self.queues.New()  # commands by the user
@@ -43,69 +41,43 @@ class Overlay(threading.Thread):
         self.queue_to_peer = dict()  # remember which queue was used for which peer
 
         # first connect to the overlay
-        if entrypeers is not None:
+        if entrypeers:
             self.cmdqueue.put(('join', entrypeers))
 
         threading.Thread.__init__(self)
 
-    @property
-    def group(self):
-        return self.state['group']
+    def __getattr__(self, name):
+        """Access state properties directly by name"""
+        try:
+            state = object.__getattribute__(self, 'state')
+            if name in state:
+                return state[name]
+        except:
+            pass
+        raise AttributeError
 
-    @group.setter
-    def group(self, value):
-        self.state['group'] = value
+    def __setattr__(self, name, value):
+        """Set state properties directly by name"""
+        try:
+            state = object.__getattribute__(self, 'state')
+            if name in state:
+                state[name] = value
+                return
+        except AttributeError:
+            pass
+        object.__setattr__(self, name, value)
 
-    def get_cmd_queue(self):
-        '''Returns the queue that can be used by the user to interactively
-        issue commands (overlay operations).'''
-
-        return self.cmdqueue
+    def put_cmd(self, cmd):
+        self.cmdqueue.put(cmd)
 
     def find_group(self):
+        """Send a group ping to identify groups"""
         ping_id = uuid.uuid4()
         message = proto.GroupPing(ping_id)
-        self.group_pings[ping_id] = []
+        self.state['group_pings'][ping_id] = []
         for p in self.state['neighbours']:
-            self.logger.debug('sending group ping to {}'.format(p.address))
-            self.group_pings[ping_id] = None
+            self.state['group_pings'][ping_id] = None
             p.send(message)
-
-    def handle_group_ping(self, sender, ping):
-        if ping.ping_id in self.group_pings:
-            # We've seen this ping, do nothing
-            self.logger.debug('known ping -> ignore')
-        else:
-            # We've not seen this ping, flood
-            self.group_pings[ping.ping_id] = sender
-            ping.ttl -= 1
-            for p in self.state['neighbours']:
-                self.logger.debug('forwarding group ping to {}'.format(p.address))
-                p.send(ping)
-
-            if self.group:
-                # We're in a group, so we should answer
-                self.logger.debug('reply with group pong to {}'.format(sender.address))
-                if isinstance(self.group, GroupLeader):
-                    m = proto.GroupPong(ping.ping_id, network.get_group_address(), self.group.music)
-                elif isinstance(self.group, GroupPeer):
-                    m = proto.GroupPong(ping.ping_id, self.group.leader, self.group.music)
-                sender.send(m)
-
-    def handle_group_pong(self, sender, pong):
-        if pong.ping_id in self.group_pings:
-            # pong is excpected
-            original_sender = self.group_pings[pong.ping_id]
-            if original_sender:
-                # reverse path route pong
-                self.logger.debug('reverse route pong to {}'.format(original_sender.address))
-                original_sender.send(pong)
-            else:
-                # we pinged
-                self.logger.debug('received pong with group candidate {}'.format(pong.leader))
-                score = mpd.music.check_sample(pong.music)
-                self.logger.debug('score for pong is {}'.format(score))
-                self.group_candidates[score] = pong.leader
 
     def _listen_event(self, data):
         self.logger.info('new incoming peer connection')
@@ -121,12 +93,12 @@ class Overlay(threading.Thread):
         new_peer.start()
 
     def _user_event(self, data):
-        self.logger.info('executing user command: {}'.format(data))
-
+        # TODO: use argparse
+        self.logger.info('received user command: {}'.format(data))
         (cmd, payload) = data
 
         if cmd == 'join':
-            # join the overlay using the given entry peers
+            # Join the overlay using the given entry peers
             if self.state['joining'] is not None:
                 self.logger.error('already joining, ignore command.')
                 return
@@ -135,40 +107,33 @@ class Overlay(threading.Thread):
                 self.logger.error("already connected, don't join.")
                 return
 
-            self.logger.info('joining the overlay...')
-            self.state['joining'] = {
-                'candidates': payload,
-            }
+            self.logger.info('joining the overlay')
+            self.state['joining'] = {'candidates': payload}
 
             new_queue = self.queues.New()
-            good_peer = None
             for entry_addr in self.state['joining']['candidates'][:]:
                 self.state['joining']['candidates'].remove(entry_addr)
                 try:
-                    self.logger.info('trying to join via {}'
-                                     .format(entry_addr))
+                    self.logger.info('trying to join via {}'.format(entry_addr))
                     new_peer = Peer(entry_addr, new_queue)
                     new_peer.connect()
-                    good_peer = new_peer
                     break
                 except OSError as e:
-                    self.logger.warning('cannot join via {} ({})'
-                                        .format(entry_addr, e))
-
-            if good_peer is None:
+                    self.logger.warning('cannot join via {} ({})'.format(entry_addr, e))
+            else:
                 self.logger.error('no entry peer available, cannot join')
                 self.state['joining'] = None
                 self.queues.remove(new_queue)
                 return
 
-            self.queue_to_peer[new_queue] = good_peer
-            good_peer.start()
+            self.queue_to_peer[new_queue] = new_peer
+            new_peer.start()
 
             ping_id = str(uuid.uuid4())
-            self.state['joining']['current_entry'] = good_peer
+            self.state['joining']['current_entry'] = new_peer
             self.state['joining']['ping_id'] = ping_id
 
-            good_peer.send(proto.Ping(ping_id, 3))
+            new_peer.send(proto.Ping(ping_id, 3))
 
         elif cmd == 'user_cmd':
             if payload == 'status':
@@ -182,23 +147,24 @@ class Overlay(threading.Thread):
             elif payload.startswith('g'):
                 group_cmd = payload.split()[1]
                 if group_cmd == 'new':
-                    self.group = GroupLeader()
+                    self.state['group'] = GroupLeader()
                 elif group_cmd == 'join':
                     if len(payload.split()) > 2:
-                        self.group = GroupPeer(payload.split()[-1])
-                    elif self.group_candidates:
-                        best = max(self.group_candidates.keys())
-                        self.group = GroupPeer(self.group_candidates[best])
-                        self.group_candidates = dict()
+                        self.state['group'] = GroupPeer(payload.split()[-1])
+                    elif self.state['group_candidates']:
+                        best = max(self.state['group_candidates'].keys())
+                        self.state['group'] = GroupPeer(self.state['group_candidates'][best])
+                        self.state['group_candidates'] = dict()
                 elif group_cmd == 'find':
                     self.find_group()
-                elif group_cmd == 'leave' and self.group:
-                    self.group.leave()
-                    self.group = None
-                elif group_cmd == 'music':
-                    self.group.show_music()
-                elif group_cmd == 'add':
-                    self.group.add_song(payload.split()[-1])
+                elif self.state['group']:
+                    if group_cmd == 'leave' and self.state['group']:
+                        self.state['group'].leave()
+                        self.state['group'] = None
+                    elif group_cmd == 'music' and self.state['group']:
+                        self.state['group'].show_music()
+                    elif group_cmd == 'add' and self.state['group']:
+                        self.state['group'].add_song(payload.split()[-1])
 
             else:
                 self.logger.error('unknown user command: {}'.format(payload))
@@ -207,17 +173,18 @@ class Overlay(threading.Thread):
             self.logger.error('unknown command: {}'.format(cmd))
 
     def _peer_event(self, inqueue, data):
-        # a message from another peer
         peer = self.queue_to_peer[inqueue]
-        self.logger.info('got a message from peer {}: {}'.format(peer, data))
+        self.logger.info('received {} <- {}'.format(type(data), peer))
 
-        if data is None:
+        # peer event handlers
+        def close():
             self.logger.info('connection closed')
 
+            peer = self.queue_to_peer[inqueue]
             if self.state['joining'] is not None and peer == self.state['joining']['current_entry']:
                 self.logger.error('error joining, entry died')
                 if len(self.state['joining']['candidates']) > 0:
-                    self.logger.info('more entries to try...')
+                    self.logger.info('more entries to try')
                     self.cmdqueue.put(('join',
                                        self.state['joining']['candidates']))
                     self.state['joining'] = None
@@ -233,8 +200,7 @@ class Overlay(threading.Thread):
 
             del self.queue_to_peer[inqueue]
 
-        elif isinstance(data, proto.Ping):
-            self.logger.debug('got a PING message!')
+        def ping():
             p_id = data.get_id()
             ttl = data.get_ttl()
 
@@ -246,7 +212,6 @@ class Overlay(threading.Thread):
 
             if ttl == 0 or len(dependencies) == 0:
                 # do not recurse
-                self.logger.debug('answering with PONG directly')
                 peer.send(proto.Pong(p_id))
                 if peer not in self.state['neighbours']:
                     # keep connection to neighbours alive
@@ -267,11 +232,10 @@ class Overlay(threading.Thread):
             }
 
             for n in self.state['pings'][p_id]['pending']:
-                self.logger.debug('forwarding ping to {}'.format(n))
-                n.send(proto.Ping(p_id, ttl-1))
+                self.logger.debug('forwarding ping'.format(n))
+                n.send(proto.Ping(p_id, ttl - 1))
 
-        elif isinstance(data, proto.Pong):
-            self.logger.debug('got a PONG message!')
+        def pong():
             p_id = data.get_id()
             addrs = data.get_peers()
 
@@ -336,9 +300,7 @@ class Overlay(threading.Thread):
                 # TODO already delete pings entry ??
                 del self.state['pings'][p_id]
 
-        elif isinstance(data, proto.Neighbour):
-            self.logger.debug('peer {} uses us as a neighbour'.format(peer))
-
+        def neighbour():
             if peer in self.state['neighbours']:
                 self.logger.debug('already have it as a neighbour')
                 return
@@ -351,26 +313,69 @@ class Overlay(threading.Thread):
             self.state['neighbours'].append(peer)
             peer.send(proto.Neighbour())
 
-        elif isinstance(data, proto.Sample):
-            self.logger.debug('peer {} has send sample'.format(peer))
+        def sample():
             score = mpd.music.check_sample(data.hashes)
             self.logger.debug('score for sample is {}'.format(score))
 
-        elif isinstance(data, proto.GroupPing):
-            self.handle_group_ping(peer, data)
+        def group_ping():
+            if data.ping_id in self.state['group_pings']:
+                # We've seen this ping, do nothing
+                self.logger.debug('known ping -> ignore')
+            else:
+                # We've not seen this ping, flood
+                self.state['group_pings'][data.ping_id] = peer
+                data.ttl -= 1
+                for p in self.state['neighbours']:
+                    p.send(data)
 
-        elif isinstance(data, proto.GroupPong):
-            self.handle_group_pong(peer, data)
+                if self.state['group']:
+                    # We're in a group, so we should answer
+                    self.logger.debug('reply with group pong to {}'.format(peer.address))
+                    music = self.state['group'].music
+                    if isinstance(self.state['group'], GroupLeader):
+                        m = proto.GroupPong(data.ping_id, network.get_group_address(), music)
+                    elif isinstance(self.state['group'], GroupPeer):
+                        m = proto.GroupPong(data.ping_id, self.state['group'].leader, music)
+                    peer.send(m)
+
+        def group_pong():
+            if data.ping_id in self.state['group_pings']:
+                # pong is excpected
+                original_sender = self.state['group_pings'][data.ping_id]
+                if original_sender:
+                    # reverse path route pong
+                    self.logger.debug('reverse route pong to {}'.format(original_sender.address))
+                    original_sender.send(data)
+                else:
+                    # we pinged
+                    self.logger.debug('received pong with group candidate {}'.format(data.leader))
+                    score = mpd.music.check_sample(data.music)
+                    self.logger.debug('score for pong is {}'.format(score))
+                    self.state['group_candidates'][score] = data.leader
+
+        # assign handlers to data types
+        handlers = {
+                type(None): close,
+                proto.Ping: ping,
+                proto.Pong: pong,
+                proto.Neighbour: neighbour,
+                proto.Sample: sample,
+                proto.GroupPing: group_ping,
+                proto.GroupPong: group_pong
+        }
+
+        # dispatch handler
+        handlers[type(data)]()
 
     def run(self):
         # open up our own listen socket
-        self.logger.debug('setting up socket...')
+        self.logger.debug('setting up socket')
         self.listen = socket.socket()
-        self.logger.debug('trying to listen on {}...'.format(self.listenaddress))
+        self.logger.debug('trying to listen on {}'.format(self.listenaddress))
 
         self.listen.bind(network.parse_address(self.listenaddress))
         self.listen.listen(10)
-        self.logger.info('server socket established.')
+        self.logger.info('server socket established')
 
         # the queue that will be used for signalling new connections
         self.listenQ = self.queues.New()
@@ -387,15 +392,15 @@ class Overlay(threading.Thread):
 
             # determine, what kind of event occured
             if inqueue == self.listenQ:
-                # A Peer established a connection to us.
+                # new peer established a connection to us
                 self._listen_event(data)
 
             elif inqueue == self.cmdqueue:
-                # A command from the user
+                # command from the user
                 self._user_event(data)
 
             elif inqueue in self.queue_to_peer:
-                # a message from another peer
+                # message from another peer
                 self._peer_event(inqueue, data)
 
             else:
@@ -406,14 +411,14 @@ class Overlay(threading.Thread):
         print('\n'.join(':'.join(p.address) for p in self.state['neighbours']))
 
         print('[Group]')
-        if self.group:
-            print('*{}*'.format(len(self.group.music)))
-            if isinstance(self.group, GroupLeader):
+        if self.state['group']:
+            print('*{}*'.format(len(self.state['group'].music)))
+            if isinstance(self.state['group'], GroupLeader):
                 print('*leader*')
-            elif isinstance(self.group, GroupPeer):
+            elif isinstance(self.state['group'], GroupPeer):
                 print('*peer*')
-                print(self.group.leader, '*leader*')
-            print('\n'.join(self.group.peers))
+                print(self.state['group'].leader, '*leader*')
+            print('\n'.join(self.state['group'].peers))
         else:
             print('*none*')
 
