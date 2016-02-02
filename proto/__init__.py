@@ -3,7 +3,7 @@
 import logging
 import pickle
 
-from proto.group import GroupJoin, GroupInfo, GroupMusic
+from proto.group import GroupJoin, GroupInfo, GroupMusic, GroupLeave
 from proto.peer import Hello, Neighbour, Sample
 from proto.ping import Ping, Pong
 

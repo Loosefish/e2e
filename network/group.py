@@ -45,6 +45,12 @@ class GroupLeader(MusicMixin, socketserver.TCPServer):
         m = proto.GroupInfo(network.get_group_address(), self.peers)
         self.send_all(m)
 
+    def remove_peer(self, a, p):
+        peer = '{}:{}'.format(a, p)
+        self.peers.remove(peer)
+        m = proto.GroupInfo(network.get_group_address(), self.peers)
+        self.send_all(m)
+
     def send_all(self, m):
         for p in self.peers:
             GroupLeader.send_peer(p, m)
@@ -68,13 +74,15 @@ class GroupLeaderHandler(ServerLogger, socketserver.BaseRequestHandler):
             # peer wants to join group
             self.logger.debug('join request from {} ({})'.format(self.client_address[0], msg.port))
             # answer with GroupInfo
-            answer = bytes(proto.GroupInfo(network.get_group_address(), self.server.peers))
-            self.request.sendall(answer)
             self.server.add_peer(self.client_address[0], msg.port)
 
         elif isinstance(msg, proto.GroupMusic):
             self.server.update_music(msg.hashes)
             self.server.send_all(proto.GroupMusic(self.server.music))
+
+        elif isinstance(msg, proto.GroupLeave):
+            self.logger.debug('peer leaving: {} ({})'.format(self.client_address[0], msg.port))
+            self.server.remove_peer(self.client_address[0], msg.port)
 
 
 class GroupPeer(MusicMixin, socketserver.TCPServer):
@@ -120,6 +128,12 @@ class GroupPeer(MusicMixin, socketserver.TCPServer):
             sock.settimeout(10)  # TODO: Handle timeout exception
             sock.connect(network.parse_address(self.leader))
             sock.sendall(bytes(m))
+
+    def leave(self):
+        self.logger.debug('leaving group')
+        self.shutdown()
+        self.server_close()
+        self.send_leader(proto.GroupLeave())
 
 
 class GroupPeerHandler(ServerLogger, socketserver.BaseRequestHandler):
