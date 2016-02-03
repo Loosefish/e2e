@@ -4,6 +4,7 @@ from subprocess import Popen
 from tempfile import TemporaryDirectory
 import logging
 import os
+import socket
 
 from mpd import daemon, playback
 
@@ -46,7 +47,12 @@ def run(music_dir):
         except (ConnectionRefusedError, FileNotFoundError):
             pass
     # wait for music database
-    daemon.get_query("idle database")
+    while 'db_update' not in daemon.get_dict("stats"):
+        try:
+            daemon.get_query("idle database", timeout=0.5)
+        except socket.timeout:
+            pass
+
     logger.info('ready')
 
 

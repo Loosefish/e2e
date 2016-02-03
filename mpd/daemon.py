@@ -11,20 +11,19 @@ def set_socket(mpd_socket):
     _mpd_socket = mpd_socket
 
 
-def get_query(text):
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(None)
-    s.connect(_mpd_socket)
-    data = s.recv(32)
-    s.sendall(bytes(text + '\n', 'utf8'))
-    response = b''
-    while True:
-        data = s.recv(4096)
-        response = response + data
-        if data[-4:] == b'\nOK\n' or data == b'OK\n':
-            break
-    s.close()
-    return str(response, 'utf8').splitlines()[:-1]
+def get_query(text, timeout=None):
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
+        s.connect(_mpd_socket)
+        data = s.recv(32)
+        s.sendall(bytes(text + '\n', 'utf8'))
+        response = b''
+        while True:
+            data = s.recv(4096)
+            response = response + data
+            if data[-4:] == b'\nOK\n' or data == b'OK\n':
+                break
+        return str(response, 'utf8').splitlines()[:-1]
 
 
 def get_dicts(query):
@@ -39,3 +38,7 @@ def get_dicts(query):
         else:
             d[tag] = value
     return dicts
+
+
+def get_dict(query):
+    return get_dicts(query)[0]
