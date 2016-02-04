@@ -14,6 +14,7 @@ from network.group import GroupLeader, GroupPeer
 from network.peer import Peer
 import proto
 from signalqueue import QueueSet
+from bounded_dict import BoundedDict
 
 N_NEIGHBOURS = 2  # number of neighbours every node tries to have
 
@@ -31,7 +32,7 @@ class Overlay(threading.Thread):
             'joining': None,  # has data when we are currently trying to join
             'pings': dict(),
             'group': None,
-            'group_pings': dict(),
+            'group_pings': BoundedDict(16384),
             'group_candidates': dict()
         }
 
@@ -74,9 +75,8 @@ class Overlay(threading.Thread):
         """Send a group ping to identify groups"""
         ping_id = uuid.uuid4()
         message = proto.GroupPing(ping_id)
-        self.state['group_pings'][ping_id] = []
+        self.state['group_pings'][ping_id] = None
         for p in self.state['neighbours']:
-            self.state['group_pings'][ping_id] = None
             p.send(message)
 
     def _listen_event(self, data):
