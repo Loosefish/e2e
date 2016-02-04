@@ -20,8 +20,12 @@ def parse(rawbytes):
 def receive(sock):
     b = None
     length = b''
-    while b != b'\n':
+    while True:
         b = sock.recv(1)
+        if not b or not len(b):
+            return None
+        elif b == b'\n':
+            break
         length += b
 
     length = int(length.decode())
