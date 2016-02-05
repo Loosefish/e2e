@@ -13,6 +13,10 @@ _mpd_proc = None
 
 
 def run(music_dir):
+    music_dir = os.path.abspath(os.path.expanduser(music_dir))
+    if not os.path.isdir(music_dir):
+        raise FileNotFoundError(music_dir)
+
     logger = logging.getLogger('mpd')
     global _mpd_dir
     _mpd_dir = TemporaryDirectory(prefix='e2e-mpd.')
@@ -29,7 +33,7 @@ def run(music_dir):
         f.write('db_file "{}"\n'.format(mpd_db))
         f.write('log_file "syslog"\n')
         f.write('bind_to_address "{}"\n'.format(mpd_socket))
-        f.write('music_directory "{}"\n'.format(os.path.abspath(music_dir)))
+        f.write('music_directory "{}"\n'.format(music_dir))
 
     logger.debug('created mpd config in {}'.format(mpd_dir))
     logger.debug('starting on {}...'.format(mpd_socket))
