@@ -13,7 +13,7 @@ class ConnectionWaiter(threading.Thread):
         self.sock = sock
         self.q = q
 
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self, daemon=True)
 
     def run(self):
         while True:

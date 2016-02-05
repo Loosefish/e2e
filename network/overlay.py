@@ -25,7 +25,6 @@ class Overlay(threading.Thread):
         self.logger = logging.getLogger("overlay")
 
         self.listenaddress = network.get_address()
-        self.entrypeers = entrypeers
 
         self.state = {
             'neighbours': [],
@@ -43,9 +42,9 @@ class Overlay(threading.Thread):
 
         # first connect to the overlay
         if entrypeers:
-            self.cmdqueue.put(('join', entrypeers))
+            self.cmdqueue.put('join {}'.format(" ".join(entrypeers)))
 
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self, daemon=True)
 
     def __getattr__(self, name):
         """Access state properties directly by name"""
@@ -93,9 +92,9 @@ class Overlay(threading.Thread):
         new_peer.start()
 
     def _user_event(self, data):
-        # TODO: use argparse
-        self.logger.info('received user command: {}'.format(data))
-        (cmd, payload) = data
+        self.logger.debug('received user command: {}'.format(data))
+        args = data.split()
+        cmd = args[0]
 
         if cmd == 'join':
             # Join the overlay using the given entry peers
@@ -108,10 +107,10 @@ class Overlay(threading.Thread):
                 return
 
             self.logger.info('joining the overlay')
-            self.state['joining'] = {'candidates': payload}
+            self.state['joining'] = {'candidates': args[1:]}
 
             new_queue = self.queues.New()
-            for entry_addr in self.state['joining']['candidates'][:]:
+            for entry_addr in self.state['joining']['candidates']:
                 self.state['joining']['candidates'].remove(entry_addr)
                 try:
                     self.logger.info('trying to join via {}'.format(entry_addr))
@@ -135,42 +134,38 @@ class Overlay(threading.Thread):
 
             new_peer.send(proto.Ping(ping_id, 3))
 
-        elif cmd == 'user_cmd':
-            if payload == 'status':
-                self.print_status()
+        elif cmd == 'status':
+            self.print_status()
 
-            elif payload.startswith('sample'):
-                _, peer = payload.split()
-                peer = self.state['neighbours'][int(peer)]
-                peer.send(proto.Sample(mpd.music.get_sample()))
+        elif cmd.startswith('sample'):
+            peer = args[1]
+            peer = self.state['neighbours'][int(peer)]
+            peer.send(proto.Sample(mpd.music.get_sample()))
 
-            elif payload.startswith('g'):
-                group_cmd = payload.split()[1]
-                if group_cmd == 'new':
-                    self.state['group'] = GroupLeader()
-                elif group_cmd == 'join':
-                    if len(payload.split()) > 2:
-                        self.state['group'] = GroupPeer(payload.split()[-1])
-                    elif self.state['group_candidates']:
-                        best = max(self.state['group_candidates'].keys())
-                        self.state['group'] = GroupPeer(self.state['group_candidates'][best])
-                        self.state['group_candidates'] = dict()
-                elif group_cmd == 'find':
-                    self.find_group()
-                elif self.state['group']:
-                    if group_cmd == 'leave' and self.state['group']:
-                        self.state['group'].leave()
-                        self.state['group'] = None
-                    elif group_cmd == 'music' and self.state['group']:
-                        self.state['group'].show_music()
-                    elif group_cmd == 'add' and self.state['group']:
-                        self.state['group'].add_song(payload.split()[-1])
-
-            else:
-                self.logger.error('unknown user command: {}'.format(payload))
+        elif cmd.startswith('g'):
+            group_cmd = args[1]
+            if group_cmd == 'new':
+                self.state['group'] = GroupLeader()
+            elif group_cmd == 'join':
+                if len(args[2:]) > 2:
+                    self.state['group'] = GroupPeer(args[-1])
+                elif self.state['group_candidates']:
+                    best = max(self.state['group_candidates'].keys())
+                    self.state['group'] = GroupPeer(self.state['group_candidates'][best])
+                    self.state['group_candidates'] = dict()
+            elif group_cmd == 'find':
+                self.find_group()
+            elif self.state['group']:
+                if group_cmd == 'leave' and self.state['group']:
+                    self.state['group'].leave()
+                    self.state['group'] = None
+                elif group_cmd == 'music' and self.state['group']:
+                    self.state['group'].show_music()
+                elif group_cmd == 'add' and self.state['group']:
+                    self.state['group'].add_song(args[-1])
 
         else:
-            self.logger.error('unknown command: {}'.format(cmd))
+            self.logger.error('unknown user command: {}'.format(cmd))
 
     def _peer_event(self, inqueue, data):
         peer = self.queue_to_peer[inqueue]

@@ -45,7 +45,7 @@ class GroupLeader(BasicGroupServer):
         self.logger.info('starting group leader server on {}'.format(address))
 
         super().__init__(address, GroupLeaderHandler)
-        self.thread = threading.Thread(target=self.serve_forever)
+        self.thread = threading.Thread(target=self.serve_forever, daemon=True)
         self.thread.start()
 
     def add_peer(self, a, p):
@@ -124,7 +124,7 @@ class GroupPeer(BasicGroupServer):
         self.logger.info('starting peer server on {}'.format(address))
 
         super().__init__(network.parse_address(address), GroupPeerHandler)
-        self.thread = threading.Thread(target=self.serve_forever)
+        self.thread = threading.Thread(target=self.serve_forever, daemon=True)
         self.thread.start()
 
         # try to contact group leader with GroupJoin
@@ -180,7 +180,7 @@ class GroupPeerHandler(ServerLogger, socketserver.BaseRequestHandler):
 
         elif isinstance(msg, proto.GroupLeave):
             # TODO: this is hacky because the overlay still has a reference
-            t = threading.Thread(target=self.server.stop())
+            t = threading.Thread(target=self.server.stop)
             t.start()
 
         elif isinstance(msg, proto.GroupPlaylist):

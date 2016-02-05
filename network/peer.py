@@ -25,7 +25,7 @@ class Peer(threading.Thread):
             self.sock = None  # the socket used for communication
             self.state = "disconnected"
 
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self, daemon=True)
 
     @staticmethod
     def from_connection(conn, inbox):
