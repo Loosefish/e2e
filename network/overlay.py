@@ -326,7 +326,8 @@ class Overlay(threading.Thread):
                 self.state['group_pings'][data.ping_id] = peer
                 data.ttl -= 1
                 for p in self.state['neighbours']:
-                    p.send(data)
+                    if p != peer:
+                        p.send(data)
 
                 if self.state['group']:
                     # We're in a group, so we should answer
