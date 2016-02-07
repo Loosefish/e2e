@@ -46,27 +46,6 @@ class Overlay(threading.Thread):
 
         threading.Thread.__init__(self, daemon=True)
 
-    def __getattr__(self, name):
-        """Access state properties directly by name"""
-        try:
-            state = object.__getattribute__(self, 'state')
-            if name in state:
-                return state[name]
-        except:
-            pass
-        raise AttributeError
-
-    def __setattr__(self, name, value):
-        """Set state properties directly by name"""
-        try:
-            state = object.__getattribute__(self, 'state')
-            if name in state:
-                state[name] = value
-                return
-        except AttributeError:
-            pass
-        object.__setattr__(self, name, value)
-
     def put_cmd(self, cmd):
         self.cmdqueue.put(cmd)
 
