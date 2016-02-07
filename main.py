@@ -2,8 +2,11 @@
 
 import argparse
 import logging
-import readline
 import sys
+try:
+    import readline
+except ImportError:
+    pass
 
 import network
 from network.overlay import Overlay
@@ -36,7 +39,10 @@ if __name__ == '__main__':
     the_overlay = Overlay(args.remotes)
     the_overlay.start()
 
-    readline.set_history_length(1000)
+    try:
+        readline.set_history_length(100)
+    except NameError:
+        pass
     while True:
         line = input()
         if line in ('exit', 'quit', 'q'):
