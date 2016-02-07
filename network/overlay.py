@@ -174,6 +174,9 @@ class Overlay(threading.Thread):
             # TODO if neighbour, try to reconnect (peer may have closed
             # it, unaware of the fact that it's a neighbour of ours)
 
+            # TODO if group leader, leave group
+            # (problem: map peer to group communication)
+
             if peer in self.state['neighbours']:
                 self.logger.debug('forgetting peer {}] as a neighbour'.format(peer))
                 self.state['neighbours'].remove(peer)
@@ -228,6 +231,8 @@ class Overlay(threading.Thread):
                 neighbourlist = list(neighbourset)
                 random.shuffle(neighbourlist)
 
+                forcing = True
+
                 for n in neighbourlist:
                     if len(self.state['neighbours']) >= N_NEIGHBOURS:
                         break
@@ -246,8 +251,10 @@ class Overlay(threading.Thread):
                     self.logger.debug('peer {} added as a neighbour'.format(n))
                     self.state['neighbours'].append(new_peer)
                     new_peer.start()
-                    new_peer.send(proto.Neighbour())
+                    new_peer.send(proto.Neighbour(force=forcing))
                     self.queue_to_peer[new_queue] = new_peer
+
+                    forcing = False
 
                 # don't need to close connection, since the peer
                 # triggered closing it
@@ -286,8 +293,11 @@ class Overlay(threading.Thread):
                 return
 
             if len(self.state['neighbours']) >= N_NEIGHBOURS:
-                self.logger.debug('we have enough neighbours')
-                return
+                if data.force:
+                    self.logger.debug("accept as neighbour because we have to")
+                else:
+                    self.logger.debug('we have enough neighbours')
+                    return
 
             self.logger.debug('peer {} added as a neighbour'.format(peer))
             self.state['neighbours'].append(peer)

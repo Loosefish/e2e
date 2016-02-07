@@ -13,8 +13,8 @@ class Hello(PicklingMessage):
 
 class Neighbour(PicklingMessage):
     '''Tell the remote peer that we now use him as a peer.'''
-    def __init__(self):
-        pass
+    def __init__(self, force=False):
+        self.force = force
 
 
 class Sample(PicklingMessage):
