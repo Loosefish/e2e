@@ -13,6 +13,17 @@ from network.overlay import Overlay
 import mpd
 
 
+banner = """
+
+      _/_/_/_/    _/_/    _/_/_/_/
+           _/  _/    _/  _/
+      _/_/_/      _/    _/_/_/
+         _/    _/      _/
+  _/_/_/_/  _/_/_/_/  _/_/_/_/
+
+"""
+
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger('main')
@@ -43,6 +54,9 @@ if __name__ == '__main__':
         readline.set_history_length(100)
     except NameError:
         pass
+
+    print(banner)
+    print("Ready for input!")
     while True:
         line = input()
         if line in ('exit', 'quit', 'q'):
