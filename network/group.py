@@ -82,6 +82,10 @@ class GroupLeader(BasicGroupServer):
         m = proto.GroupLeave()
         self.send_all(m)
 
+    def play(self, index=0):
+        mpd.playback.play(index)
+        self.send_all(proto.GroupPlaylist.play(index))
+
     def add_song(self, song_no):
         song = self.get_hash(song_no)
         if song in self.music:
@@ -173,6 +177,9 @@ class GroupPeer(BasicGroupServer):
         if song in self.music:
             msg = proto.GroupPlaylist.add(song)
             self.send_all(msg)
+
+    def play(self, index=0):
+        self.send_all(proto.GroupPlaylist.play(index))
 
 
 class GroupPeerHandler(ServerLogger, socketserver.BaseRequestHandler):

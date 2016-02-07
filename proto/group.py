@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from proto.util import PicklingMessage
 import network
+import mpd.playback
 import mpd.playlist
 
 
@@ -41,10 +42,15 @@ class GroupPong(PicklingMessage):
 
 class GroupPlaylist(PicklingMessage):
     _add = '+'
+    _play = '!'
 
     def __init__(self, op, arg):
         self.op = op
         self.arg = arg
+
+    @staticmethod
+    def play(index=0):
+        return GroupPlaylist(GroupPlaylist._play, index)
 
     @staticmethod
     def add(song):
@@ -53,3 +59,5 @@ class GroupPlaylist(PicklingMessage):
     def do(self):
         if self.op == GroupPlaylist._add:
             mpd.playlist.add(mpd.music.get_song(self.arg))
+        elif self.op == GroupPlaylist._play:
+            mpd.playback.play(self.arg)

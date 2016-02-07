@@ -135,12 +135,18 @@ class Overlay(threading.Thread):
             elif group_cmd == 'find':
                 self.find_group()
             elif self.state['group']:
-                if group_cmd == 'leave' and self.state['group']:
+                if group_cmd == 'leave':
                     self.state['group'].leave()
                     self.state['group'] = None
-                elif group_cmd == 'music' and self.state['group']:
+                elif group_cmd == 'music':
                     self.state['group'].show_music()
-                elif group_cmd == 'add' and self.state['group']:
+                elif group_cmd == 'play':
+                    try:
+                        index = int(args[-1])
+                    except ValueError:
+                        index = 0
+                    self.state['group'].play(index)
+                elif group_cmd == 'add':
                     try:
                         self.state['group'].add_song(int(args[-1]))
                     except ValueError:
