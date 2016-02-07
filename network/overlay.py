@@ -40,7 +40,22 @@ class Overlay(threading.Thread):
 
         self.queue_to_peer = dict()  # remember which queue was used for which peer
 
-        # first connect to the overlay
+        # open up our own listen socket
+        self.logger.debug('setting up socket')
+        self.listen = socket.socket()
+        self.logger.debug('trying to listen on {}'.format(self.listenaddress))
+
+        self.listen.bind(network.parse_address(self.listenaddress))
+        self.listen.listen(10)
+        self.logger.info('server socket established')
+
+        # the queue that will be used for signalling new connections
+        self.listenQ = self.queues.New()
+
+        self.listen_thread = ConnectionWaiter(self.listen, self.listenQ)
+        self.listen_thread.start()
+
+        # connect to the overlay
         if entrypeers:
             self.cmdqueue.put('join {}'.format(" ".join(entrypeers)))
 
@@ -113,15 +128,10 @@ class Overlay(threading.Thread):
 
             new_peer.send(proto.Ping(ping_id, 3))
 
-        elif cmd == 'status':
+        elif cmd.startswith('s'):
             self.print_status()
 
-        elif cmd.startswith('sample'):
-            peer = args[1]
-            peer = self.state['neighbours'][int(peer)]
-            peer.send(proto.Sample(mpd.music.get_sample()))
-
-        elif cmd.startswith('g'):
+        elif cmd.startswith('g') and len(args) > 1:
             group_cmd = args[1]
             if group_cmd == 'new':
                 self.state['group'] = GroupLeader()
@@ -154,6 +164,17 @@ class Overlay(threading.Thread):
 
         else:
             self.logger.error('unknown user command: {}'.format(cmd))
+            print('\n  '.join(('[Commands]',
+                               'join <peer> -- join overlay',
+                               's[tatus] -- print status information',
+                               'q[uit]')))
+            print('\n  g[roup] '.join(('[Group commands]',
+                                       'new -- create a new group',
+                                       'find -- find available groups',
+                                       'join -- join the best known group',
+                                       'music -- list group music',
+                                       'add <song_no> -- add song to group playlist',
+                                       'play [number] -- start playing song from group playlist')))
 
     def _peer_event(self, inqueue, data):
         peer = self.queue_to_peer[inqueue]
@@ -366,25 +387,6 @@ class Overlay(threading.Thread):
         handlers[type(data)]()
 
     def run(self):
-        # open up our own listen socket
-        self.logger.debug('setting up socket')
-        self.listen = socket.socket()
-        self.logger.debug('trying to listen on {}'.format(self.listenaddress))
-
-        self.listen.bind(network.parse_address(self.listenaddress))
-        self.listen.listen(10)
-        self.logger.info('server socket established')
-
-        # the queue that will be used for signalling new connections
-        self.listenQ = self.queues.New()
-
-        self.listen_thread = ConnectionWaiter(self.listen, self.listenQ)
-        self.listen_thread.start()
-
-        # connect to the overlay
-        #  - contact entry servers until one is reachable
-        #  - TODO
-
         while True:
             (inqueue, data) = self.queues.get()
 
@@ -405,7 +407,7 @@ class Overlay(threading.Thread):
                 self.logger.error('unknown input: {}'.format(data))
 
     def print_status(self):
-        print('\n[Peers]')
+        print('[Peers]')
         print('\n'.join(':'.join(p.address) for p in self.state['neighbours']))
 
         print('[Group]')
