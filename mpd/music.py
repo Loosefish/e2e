@@ -59,6 +59,8 @@ def get_sample(size=100):
 
 
 def check_sample(to_check):
+    if len(to_check) == 0:
+        return 0
     return int(len(set(to_check) & get_hashes()) / len(to_check) * 100)
 
 

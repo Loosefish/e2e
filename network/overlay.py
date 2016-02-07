@@ -347,7 +347,8 @@ class Overlay(threading.Thread):
                     self.logger.debug('received pong with group candidate {}'.format(data.leader))
                     score = mpd.music.check_sample(data.music)
                     self.logger.debug('score for pong is {}'.format(score))
-                    self.state['group_candidates'][score] = data.leader
+                    if score > 0:
+                        self.state['group_candidates'][score] = data.leader
 
         # assign handlers to data types
         handlers = {
