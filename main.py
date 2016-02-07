@@ -48,6 +48,7 @@ if __name__ == '__main__':
         if line in ('exit', 'quit', 'q'):
             line = input('Quit? [Y/n]')
             if line in ['', 'y', 'Y']:
+                mpd.kill()
                 sys.exit(0)
             else:
                 continue
