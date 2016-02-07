@@ -191,7 +191,10 @@ class Overlay(threading.Thread):
 
             # TODO if neighbour, try to reconnect (peer may have closed
             # it, unaware of the fact that it's a neighbour of ours)
-            # TODO update neighbour list
+
+            if peer in self.state['neighbours']:
+                self.logger.debug('forgetting peer {}] as a neighbour'.format(peer))
+                self.state['neighbours'].remove(peer)
 
             del self.queue_to_peer[inqueue]
 
