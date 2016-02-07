@@ -18,11 +18,15 @@ def get_query(text, timeout=None):
         data = s.recv(32)
         s.sendall(bytes(text + '\n', 'utf8'))
         response = b''
+
+        data = s.recv(4096)
+        if data.startswith(b'ACK'):
+            return None
         while True:
-            data = s.recv(4096)
             response = response + data
             if data[-4:] == b'\nOK\n' or data == b'OK\n':
                 break
+            data = s.recv(4096)
         return str(response, 'utf8').splitlines()[:-1]
 
 
