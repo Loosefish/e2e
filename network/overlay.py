@@ -162,7 +162,7 @@ class Overlay(threading.Thread):
                 elif group_cmd == 'music' and self.state['group']:
                     self.state['group'].show_music()
                 elif group_cmd == 'add' and self.state['group']:
-                    self.state['group'].add_song(args[-1])
+                    self.state['group'].add_song(int(args[-1]))
 
         else:
             self.logger.error('unknown user command: {}'.format(cmd))

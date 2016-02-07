@@ -19,7 +19,13 @@ class BasicGroupServer(socketserver.TCPServer):
     def show_music(self):
         songs = ((h, mpd.music.get_song(h)) for h in self.music)
         songs_txt = sorted('{}  {}  ({})'.format(s.artist, s.title, h) for (h, s) in songs)
-        print('\n'.join(songs_txt))
+        for i, s in enumerate(songs_txt):
+            print('[{}] {}'.format(i, s))
+
+    def get_hash(self, song_no):
+        songs = ((h, mpd.music.get_song(h)) for h in self.music)
+        songs_txt = sorted('{}  {}  ({})'.format(s.artist, s.title, h) for (h, s) in songs)
+        return songs_txt[song_no].rsplit('(', maxsplit=1)[1][:-1]
 
     def stop(self):
         self.shutdown()
@@ -77,8 +83,9 @@ class GroupLeader(BasicGroupServer):
         self.send_all(m)
 
     def add_song(self, song_no):
-        if song_no in self.music:
-            msg = proto.GroupPlaylist.add(song_no)
+        song = self.get_hash(song_no)
+        if song in self.music:
+            msg = proto.GroupPlaylist.add(song)
             msg.do()
             self.send_all(msg)
 
@@ -162,8 +169,9 @@ class GroupPeer(BasicGroupServer):
         self.stop()
 
     def add_song(self, song_no):
-        if song_no in self.music:
-            msg = proto.GroupPlaylist.add(song_no)
+        song = self.get_hash(song_no)
+        if song in self.music:
+            msg = proto.GroupPlaylist.add(song)
             self.send_all(msg)
 
 
