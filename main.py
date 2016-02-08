@@ -58,7 +58,7 @@ if __name__ == '__main__':
     print(banner)
     print("Ready for input!")
     while True:
-        line = input()
+        line = input().strip()
         if line in ('exit', 'quit', 'q'):
             line = input('Quit? [Y/n]')
             if line in ['', 'y', 'Y']:
@@ -66,4 +66,5 @@ if __name__ == '__main__':
                 sys.exit(0)
             else:
                 continue
-        the_overlay.put_cmd(line)
+        elif line:
+            the_overlay.put_cmd(line)
