@@ -1,0 +1,34 @@
+Ear-to-Ear (E2E)
+
+1. Installation
+
+* E2E benötigt ein Linux-System mit Python 3.4 oder höher. Eine Kompilierung ist dementsprechend nicht notwendig.
+* Der Musik-Daemon mpd wird benötigt, muss allerdings nicht im Voraus laufen.
+
+2. Start
+
+Die zu startende ausführbare Datei ist main.py. Sie wird wie folgt aufgerufen:
+
+main.py [-c REMOTES [REMOTES ...]] music address overlay_port group_port
+
+* <music>: Ordner mit zu verwendenden Musikdateien (rekursiv durchsucht)
+* <address>: Als Server zu verwendende lokale IP-Adresse.
+* <overlay_port>: Lokaler TCP-Port für die Server-Seite im Overlay.
+* <group_port>: Lokaler TCP-Port zur Gruppenkommunikation (beim Abspielen).
+
+Standardmäßig verbindet sich sich E2E zu keinem Overlay, bildet also sozusagen sein eigenes. Will man sich zu einem existierenden verbinden, so können mit -c ein oder mehrere Peers zum Bootstrapping angegeben werden (jeweils in der Form <ip>:<port>).
+
+3. Benutzung
+
+Im laufenden Betrieb können Kommandos eingegeben werden, z.B.:
+
+* status: Gib den momentanen Zustand aus.
+* group new: Bilde eine neue Gruppe, mit nur mir als Mitglied
+* group find: Finde Gruppen, die ähnliche Musik haben wie ich selbst
+* group join: Tritt der besten gefundenen Gruppe bei.
+* group music: Zeige die in der Gruppe vorhandene Musik an.
+* group add <x>: Füge einen Titel zur Gruppen-Playlist hinzu (ID aus group music)
+
+4. Beispiel
+
+TODO
