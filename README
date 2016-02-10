@@ -3,7 +3,7 @@ Ear-to-Ear (E2E)
 1. Installation
 
 * E2E benötigt ein Linux-System mit Python 3.4 oder höher. Eine Kompilierung ist dementsprechend nicht notwendig.
-* Der Musik-Daemon mpd wird benötigt, muss allerdings nicht im Voraus laufen.
+* Der Musik-Daemon mpd wird benötigt, muss allerdings nicht im Voraus laufen oder konfiguriert werden.
 
 2. Start
 
