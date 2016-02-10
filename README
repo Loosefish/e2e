@@ -28,7 +28,3 @@ Im laufenden Betrieb können Kommandos eingegeben werden, z.B.:
 * group join: Tritt der besten gefundenen Gruppe bei.
 * group music: Zeige die in der Gruppe vorhandene Musik an.
 * group add <x>: Füge einen Titel zur Gruppen-Playlist hinzu (ID aus group music)
-
-4. Beispiel
-
-TODO
