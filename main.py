@@ -56,7 +56,7 @@ if __name__ == '__main__':
         pass
 
     print(banner)
-    print("Ready for input!")
+    print("Ready for input! Enter '?' for available commands.")
     while True:
         line = input().strip()
         if line in ('exit', 'quit', 'q'):
